@@ -1,7 +1,22 @@
 """
 Fast API 
     Python web-framework for building modern APIs
-    Fast Performance and Development 
+    Features 
+        Speed & performance
+            Asynchronous support with async/await syntax
+            Built on top of Starlette and Pydantic
+        Automatic data validation and serialization
+            uses Pydantic
+        Automatic interactive API documentation
+            Swagger UI and ReDoc
+        Dependency Injection System
+            easy management of components and logic 
+        Security utilities
+            built-in support for authentication and authorization
+        Good developer experience
+            minimal boilerplate code and clear error messages
+            easy to test 
+        Websockets & Streaming support        
     FastAPI() 
         to initialize app 
     Body()
@@ -23,8 +38,13 @@ Fast API
         func(id,page)
     POST Request
         to create data 
+        ex: @app.post("/create")
         data sent through body will be returned to new_book argument
         ex: create_book(new_book=Body())
+    APIRouter 
+        used to separate routes into different files for better organization and maintainability
+        we use router instead of app in route files and then we add router to app
+        ex: app.include_router(auth_router) 
     Pydantics package
         used for data modeling, data parsing and error handling 
         BaseModel
@@ -53,9 +73,5 @@ Fast API
             Server errors 
             ex: An error was caused by server 
     HTTPException
-        ex: raise HTTPException(status_code=404,detail='Item not Found')
-    APIRouter 
-        used route from main.py to respective file that handles requests
-        add router to app
-            app.include_router(auth_router)     
+        ex: raise HTTPException(status_code=404,detail='Item not Found')    
 """
