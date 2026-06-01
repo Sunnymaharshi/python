@@ -22,7 +22,6 @@ class UserPrivate(UserPublic):
 class UserUpdate(UserBase):
     username: Optional[str] = Field(default=None, min_length=2, max_length=50)
     email: Optional[EmailStr] = None
-    image_file: Optional[str] = None
 
 class Token(BaseModel):
     access_token: str
@@ -33,7 +32,7 @@ class PostBase(BaseModel):
     content: str = Field(min_length=2)
 
 class PostCreate(PostBase):
-    user_id: int
+    pass
 
 class PostUpdate(PostBase):
     title: Optional[str] = Field(default=None, min_length=2, max_length=100)
@@ -45,3 +44,10 @@ class PostResponse(PostBase):
     user_id: int
     date_posted: datetime
     author: UserPublic
+
+class PaginatedPostsResponse(BaseModel):
+    posts: list[PostResponse]
+    total: int
+    skip: int
+    limit: int
+    has_more: bool

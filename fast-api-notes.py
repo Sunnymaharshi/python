@@ -56,6 +56,16 @@ Fast API
         ex: @app.post("/create")
         data sent through body will be returned to new_book argument
         ex: create_book(new_book=Body())
+    @app.middleware("http")
+        used to define middleware functions that run before and after each request
+        ex: @app.middleware("http") async def log_requests(request: Request, call_next):
+    Background Tasks
+        used to run tasks in the background after returning a response
+        ex: from fastapi import BackgroundTasks
+            def send_email(email: str, background_tasks: BackgroundTasks):
+                background_tasks.add_task(send_email_to_user, email)
+    Celery
+        used for more complex background task management and scheduling
     APIRouter 
         used to separate routes into different files for better organization and maintainability
         we use router instead of app in route files and then we add router to app
@@ -139,4 +149,25 @@ Fast API
     db dependency injection
         used to inject a database session into a route handler using FastAPI's dependency injection system
         ex: def create_user(user: UserCreate, db: Annotated[Session, Depends(get_db)]):
+    Authentication
+        password hashing
+            pwdlib
+                implementation of various password hashing algorithms
+                recommended() function returns the most secure algorithm available
+        JWT (JSON Web Tokens)
+            used for creating access tokens for authentication
+        OAuth2 (framework)
+            used for handling authentication and authorization in FastAPI
+            swagger auto generates login UI
+            OAuth2PasswordBearer is a class that provides a way to 
+            extract the token from the request and validate it
+    Database migrations
+        Alembic
+            used for handling database migrations in SQLAlchemy projects
+            allows you to manage changes to your database schema over time like git
+            ex: alembic revision --autogenerate -m "Add new column to users table"
+            alembic upgrade head, applies pending migrations to the database
+            alembic downgrade -1, rolls back the most recent migration
+            alembic history, shows the history of migrations
+
 """
