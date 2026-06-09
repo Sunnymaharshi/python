@@ -34,6 +34,66 @@ PostgreSQL
             ✓ Complex joins & aggregations
             ✓ Stronger consistency guarantees
             ~ Mongo for pure document at scale
+    psql (CLI)
+        built-in postgres terminal client
+        psql -h host -U user -d dbname
+        \l          -> list databases
+        \dt         -> list tables
+        \d orders   -> describe table
+        \i file.sql -> run a SQL file
+        \timing     -> show query execution time
+        \x          -> expanded output
+        \e          -> open query in editor
+        psql -U admin -d dbname -c "SELECT * FROM orders;"
+    Data Types
+        Arrays
+            let you store multiple values of the same type in one column.
+            Every Postgres type can be an array — integer[], text[], uuid[].
+            You query them with array operators: @> for containment, && for overlap, ANY() for membership tests.
+            ex: CREATE TABLE posts (
+                    id        bigint PRIMARY KEY,
+                    title     text,
+                    tags      text[])
+        Hstore
+            key-value store inside a column
+            a flat map of text keys to text values.
+            ex: CREATE TABLE products (id bigint, attrs hstore);
+        Composite type
+            let you define a structured type and use it as a column type
+            ex: CREATE TYPE address AS (
+                    street  text,
+                    city    text,
+                    country text,
+                    postcode text
+                );
+        JSONB
+            Structured document in a column
+            Binary JSON stored inline.
+            Right when your data has variable or evolving shape that cannot be normalised.
+            Use jsonb_path_ops GIN for containment queries.
+
+    UUID vs serial vs identity
+        Choosing your primary key generation strategy is one of the most consequential schema design decisions.
+        SERIAL / BIGSERIAL
+            old Postgres way
+            syntactic sugar that creates a sequence and wires it to a DEFAULT
+            sequence is a separate object not tightly bound to the table
+            can cause issues when dumping/restoring or renaming tables
+            because the sequence name is independent of the table.
+            GENERATED ALWAYS
+                prevents manual inserts into id
+        GENERATED AS IDENTITY
+            SQL standard way, added in Postgres 10.
+            semantically equivalent to serial but properly bound to the column.
+            Prefer this over serial for all new tables.
+        UUIDs
+            128-bit globally unique identifiers
+            ideal for distributed systems, multi-tenant architectures
+            and systems that generate IDs before writing to the database.
+            UUID v7 is time-ordered
+                first bytes encode a millisecond timestamp
+                so new rows always append to the end of the B-tree, just like a sequential integer.
+
     PostgreSQL Internals
         MVCC — Multi-Version Concurrency Control
             Readers never block writers — writers never block readers
@@ -176,18 +236,132 @@ PostgreSQL
                 pg_stat_user_indexes
                     which indexes are actually being used
 
-
-
-
-
-
-
-
-
-
-
-
-
+    Query planning
+        EXPLAIN
+            shows the plan Postgres intends to run
+            estimated costs, row counts, join strategies.
+        EXPLAIN ANALYZE
+            actually executes the query and shows real timings.
+        EXPLAIN ANALYZE BUFFERS
+            additionally shows how many shared buffer pages were read (hits vs misses).
+            ex: EXPLAIN (ANALYZE, BUFFERS, FORMAT TEXT)
+                SELECT ...
+        Seq scan vs index scan vs bitmap scan
+            three ways Postgres can access rows from a table
+            planner picks based on cost estimates.
+            sequential scan
+                reads every page of the heap from start to
+                for small tables or queries that need most rows,
+                it's actually faster than an index because it does sequential I/O (which is fast)
+                avoids the overhead of index lookups.
+            index scan
+                traverses the B-tree index to find matching entries
+                for each entry fetches the actual row from the heap at a random location.
+            bitmap index scan
+                middle ground
+                First, Postgres scans the index entirely and builds an in-memory bitmap
+                of which heap pages contain matching rows.
+                it reads those pages in physical order (sequential-ish), visiting each page at most once
+        Hash join vs merge join vs nested loop
+            nested loop join
+                takes each row from the outer table and probes the inner table for matches.
+                If the inner table has an index on the join column, each probe is O(log n)
+            hash join
+                reads the smaller of the two tables
+                hashes its join key into a hash table in memory (work_mem)
+                then streams the larger table through that hash table.
+                default for joining two large unsorted tables when no usable index exists.
+            merge join
+                requires both inputs to already be sorted on the join key
+                It advances a pointer through each sorted set simultaneously
+                like merging two sorted lists. O(n log n)
+                for the sort phase, then O(n + m) for the merge.
+        JIT (Just-In-Time) compilation
+            For query-intensive analytics, Postgres can JIT-compile parts of the execution plan using LLVM.
+            Instead of interpreting expression evaluation row-by-row
+            it compiles the expression to native machine code.
+            This is most beneficial for long-running queries that evaluate complex expressions
+    Indexing Strategies
+        B-tree (default)
+            balanced tree structure where every leaf node is at the same depth,
+            leaf nodes are linked in a doubly-linked list ordered by the indexed value.
+            once you find the start of a range, you just walk right along the leaf level
+            B-trees handle
+                equality (=), range queries (<, >, BETWEEN)
+                IS NULL, prefix matching (LIKE 'foo%')
+                ORDER BY / GROUP BY
+            B-tree can't handle
+                LIKE '%foo' (suffix)
+                case-insensitive search without a functional index
+                full-text search
+                array containment
+        Hash index
+            Hash indexes store a hash of each value and map it to the heap location.
+            Lookup is O(1) for equality — faster than B-tree's O(log n) in theory.
+            But they only support =.
+            No ranges, no ordering, no NULL checks, no multicolumn.
+        GIN — Generalized Inverted Index
+            GIN is designed for types where a single value contains multiple searchable "keys"
+            arrays, JSONB, and tsvector (full-text search).
+            For arrays
+                WHERE tags @> ARRAY['postgres', 'indexing'] (containment).
+            For JSONB
+                WHERE data @> '{"status": "active"}'.
+            For FTS
+                WHERE to_tsvector(body) @@ to_tsquery('postgres').
+        GiST — Generalized Search Tree
+            framework for indexing types with complex overlap/proximity relationships
+            PostGIS extension uses GiST for spatial indexes.
+            Postgres's built-in range types (daterange, tsrange, int4range) use GiST.
+            The pg_trgm extension uses GiST for fuzzy text search.
+            GiST supports
+                equality, range overlap, containment
+                nearest-neighbor (ORDER BY location <-> point)
+        BRIN — Block Range Index
+            designed for very large tables where the data has a natural physical
+            correlation with the indexed column
+            time-series data where rows are inserted in timestamp order, or auto-increment IDs.
+            BRIN stores only the min and max value for each range of heap pages (default: 128 pages per range)
+        SP-GiST — Space-Partitioned GiST
+            data that partitions naturally into non-overlapping regions: quad-trees,
+            k-d trees, radix trees (tries), and space-partitioning trees.
+            Built-in Postgres types that use SP-GiST: point (2D spatial),
+            text (prefix/trie matching), inet (IP addresses and subnets), range types.
+            works well for
+                IP routing (WHERE net >>= '192.168.1.100')
+                phone number prefix matching
+                2D point proximity
+        Partial indexes
+            only indexes rows that satisfy a WHERE clause.
+            A partial index on just pending orders is tiny, fast to update
+            the planner picks it up for the exact queries you care about.
+        Expression / functional indexes
+            Postgres can index the result of any deterministic function or expression on a column.
+            for case-insensitive search, computed values, and JSON field extraction.
+        Covering indexes - INCLUDE
+            stores additional columns alongside the index key using the INCLUDE clause.
+            These extra columns are not part of the B-tree structure (not searchable)
+            they're just stored in the leaf pages.
+            This enables index-only scans
+                the query executor finds matching rows via the index
+                reads their data without ever touching the heap.
+        Multicolumn indexes
+            multicolumn index on (a, b, c) is usable for queries filtering on a, a + b, or a + b + c
+            but not on b alone or c alone. This is the left-prefix rule for B-trees.
+            Column order matters enormously.
+        Index-only scans
+            index-only scan happens when the query only needs columns that are
+            all present in the index (as key columns or INCLUDE columns)
+            visibility map says the heap page is all-visible (meaning VACUUM has run).
+            the executor never touches the heap at all.
+        Bloom filters
+            The bloom extension provides a bloom filter index
+            probabilistic structure that can test "does this row possibly match this
+            combination of equality conditions?"
+            Many-column arbitrary equality combos
+        Building indexes on production
+            CONCURRENTLY takes two table scans but never blocks reads or writes.
+            Essential for zero-downtime deployments.
 
 
 
@@ -212,6 +386,263 @@ PostgreSQL
                 concurrent execution could not have happened in any serial order
                 PostgreSQL aborts one transaction with error code 40001 (serialization_failure)
             4. Your code catches the error and retries.
+    Advisory locks
+        application-defined locks that have no connection to any actual database object.
+        they're just named integers you can lock and unlock at will.
+        They're perfect for things like distributed cron jobs (only one server should run the nightly batch)
+        application-level mutexes, or ensuring only one worker processes a particular job type.
 
+    Generated columns
+        columns whose value is automatically computed from other columns in the same row
+        ex: CREATE TABLE users (
+            id PRIMARY KEY,
+            first_name text NOT NULL,
+            last_name  text NOT NULL,
+            full_name  text GENERATED ALWAYS AS (first_name || ' ' || last_name) STORED
+        )
+    Soft deletes and audit trails
+        patterns for preserving the history of your data rather than destroying it.
+        A soft delete means marking a row as deleted rather than actually removing it with DELETE
+        The row stays in the table, invisible to normal queries
+        but available for recovery, audit, and foreign key integrity.
+
+    LATERAL joins
+        subquery on the right side that can reference columns from tables to its left
+        Without LATERAL, a subquery in a FROM clause is completely independent.
+        ex: SELECT c.name, recent.*
+            FROM customers c
+            CROSS JOIN LATERAL (subquery...)
+    DISTINCT ON
+        PostgreSQL extension to standard SQL that keeps only the first row for each unique value of expr
+    FILTER in aggregates
+        lets you apply a WHERE clause to a specific aggregate function
+        without affecting other aggregates in the same query.
+        ex: SELECT
+                COUNT(*) FILTER (WHERE status = 'completed')      AS completed,
+                SUM(amount) FILTER (WHERE status = 'completed')   AS completed_revenue,
+            FROM orders;
+    GROUPING SETS, CUBE, ROLLUP
+        multi-level aggregation without writing multiple queries and UNION ALLing them together.
+        ROLLUP
+            produces subtotals along a hierarchy
+            the classic "grand total at the bottom"
+        CUBE
+            produces all possible combinations of subtotals
+        GROUPING SETS
+            lets you specify exactly which combinations you want
+            ex: GROUP BY GROUPING SETS (
+                    (region, channel),
+                    (region, product_category),
+                    (region),
+                    ()
+                );
+    RETURNING clause
+        lets INSERT, UPDATE, and DELETE return column values from the affected rows — in a single round trip.
+        This eliminates the common pattern of "insert a row, then SELECT it back to get the generated ID.
+        RETURNING * returns all columns
+        ex: INSERT INTO users (email, name)
+            VALUES ('alice@example.com', 'Alice')
+            RETURNING id, created_at;
+    Upsert — INSERT ON CONFLICT
+        It atomically handles the "insert if not exists, update if exists" pattern
+
+    PostgreSQL FTS (Full text search)
+        1. Raw text
+        2. to_tsvector() normalises
+            Lowercases, strips stop-words, stems each word to its root (lexeme)
+        3. tsvector stored/indexed
+        4. to_tsquery() parses query
+            "fox & jump" → both lexemes must appear
+        5. @@ operator matches
+            GIN index lookup — O(1) per lexeme, no full table scan
+        6. ts_rank() scores results
+            Ranks by lexeme frequency, position, and coverage
+        pg_trgm extension — trigram fuzzy search
+            Splits words into 3-character chunks ("trigrams")
+            Two strings are similar if they share many trigrams.
+
+    JSON vs JSONB
+        Both types store valid JSON
+        JSON (TEXT)
+            Stored as-is, exact text copy
+            Preserves whitespace, key order and duplicate keys
+        JSONB (BINARY)
+            Stored decomposed as binary tree
+            Keys sorted, whitespace removed, last duplicate key wins
+    GIN indexes on JSONB
+        Without an index, any @>, ?, or ->> query does a full sequential scan.
+        GIN index on a JSONB column creates an inverted index over every key and value in every document.
+
+    Replication
+        PostgreSQL has two fundamentally different replication models.
+        PHYSICAL (STREAMING)
+            Copies raw WAL bytes
+            Exact byte-for-byte replica
+            Same PG version required
+            Used for: HA, read replicas
+            Lag: milliseconds
+        LOGICAL REPLICATION
+            Copies decoded SQL changes
+            Row-level, selective
+            Cross-version, cross-OS
+            Used for: CDC, migrations, partial replication
+        Zero-downtime production topology
+            A typical highly-available cluster has a primary, at least one sync standby for durability,
+            async replicas for read scaling, and an orchestrator that monitors and fails over automatically.
+        Synchronous vs asynchronous replication
+            With async replication, a committed transaction exists only on the primary until the
+            standby catches up — a crash can lose those transactions.
+            Sync replication waits for acknowledgment, eliminating that window.
+        Patroni
+            automated failover orchestration
+            most widely-used PostgreSQL HA solution
+            It uses a distributed consensus store (etcd, Consul, or ZooKeeper) to elect a leader,
+            manage promotion, and ensure only one primary ever exists — preventing split-brain.
+            it does
+                Health monitoring
+                Leader TTL expires
+                    If the primary's heartbeat stops, its leader lock in etcd expires (default 30s TTL).
+                    This is the failover trigger
+                Election
+                    Standbys race to acquire the leader lock.
+                    The most up-to-date standby (highest WAL LSN) wins via a compare-and-swap atomic operation
+                Promotion
+                    standby becomes writable primary
+                Old primary fenced
+                    If old primary comes back, Patroni demotes it to standby
+    Performance tuning
+        shared_buffers — the buffer cache
+            PostgreSQL's internal cache of data pages.
+            The "25% of RAM" rule is a starting point
+        effective_cache_size — planner hint only
+            tells the query planner how much total memory is available for caching
+            (shared_buffers + OS page cache combined).
+        max_connections
+            the hidden memory trap
+            Every connection spawns a backend process consuming ~5–10 MB of RAM at idle
+            At 500 connections with work_mem=64MB doing sorts, you can easily OOM a 32 GB server.
+            The answer is not a lower limit; it's connection pooling.
+        PgBouncer — connection pooling
+            sits between your app and PostgreSQL
+            multiplexing thousands of app connections onto a small pool of real backend processes
+            This is the right solution to connection pressure — not raising max_connections.
+        wal_buffers — the WAL write buffer
+            In-memory buffer for WAL records before they're flushed to disk
+            The default auto-tunes to 1/32 of shared_buffers, capped at 16 MB.
+            On high-write workloads with many concurrent committing transactions,
+            pushing this to 64 MB can reduce WAL write contention.
+        Checkpoint tuning
+            checkpoint flushes all dirty pages from shared_buffers to disk.
+            The goal is to spread checkpoint I/O over a long window so it's invisible to application queries.
+        pg_stat_statements
+            find slow queries
+            single most important extension for production performance work
+            It tracks execution statistics for every distinct query, aggregated across all runs.
+        auto_explain — automatic slow query logging
+            Automatically logs the EXPLAIN ANALYZE plan for any query exceeding a time threshold
+            without having to reproduce the query manually.
+        pg_prewarm — warm the buffer cache
+            After a server restart, shared_buffers is cold — the first queries after startup are slow
+            with autoprewarm it can restore the cache state from before the restart automatically.
+    Security
+        Role-based access control (RBAC)
+            A role can be a login user, a group, or both.
+            GRANT/REVOKE system controls what each role can do
+                on databases, schemas, tables, columns, sequences, functions, and more.
+        Row-level Security (RLS)
+            lets you restrict which rows a role can see or modify
+            Each user only sees their own data even if they share the same table
+            Critical for multi-tenant applications.
+        pgcrypto
+            encryption inside Postgres
+            adds cryptographic functions directly in SQL
+            symmetric encryption, hashing, password hashing with bcrypt, and PGP.
+
+    PostgreSQL Extensions Ecosystem
+        installed via CREATE EXTENSION <name>;
+        Spatial & Vector
+            PostGIS
+                add geographic/geometric types & functions
+                queries like find all points within 10KM of this coordinate
+            pgvector
+                stores & indexes high-dimensional vectors (embeddings)
+        Monitoring & Stats
+            pg_stat_statements
+                tracks execution statistics (call,mean time,rows)
+                for query performance analysis
+        Scheduling & Automation
+            pg_cron
+                runs SQL jobs on a cron schedule
+                directly inside postgres
+        Time series
+            TimescaleDB
+                wraps regular tables as hypertables automatically partitioned by time
+                adds time series functions and compression
+        Auditing
+            pgaudit
+                logs detailed session/object-level audit trails
+                required for SOC2/HIPAA compliance
+        UUID
+            gen_random_uuid()
+                built in
+        Partitioning management
+            pg_partman
+                automates creation and maintenance of time-or-serial based partitions
+        Fuzzy Text Search
+            pg_trgm
+                enables Fuzzy string matching
+                fast LIKE/ILIKE queries via GIN/GIST indexes
+            unaccent
+                text search dictionary that strips accents from words
+        Semi structured data
+            hstore
+                key value pairs stored in single column
+            ltree
+                stores & queries tree-structured labels
+
+    Monitoring & observability
+        system catalog views
+            pg_stat_activity
+                live snapshot of all connections and what theyre doing
+            pg_stat_user_tables
+                per table statistics
+            pg_stat_user_indexes
+                index usage stats
+            pg_stat_bg_writter
+                single row view showing background writer & checkpoint activity
+        Prometheus Stack
+            postgres_exporter + Prometheus + grafana
+                scrapes postgres metrics, exposes them as Prometheus metrics
+                grafana dashboards visualize them
+        Log Analysis
+            pgBadger
+                parses Postgres log files, generates HTML report
+
+    PostgreSQL Cloud & Modern Tooling
+        AWS
+            Amazon RDS for PostgreSQL
+                limited superuser access
+                Multi-AZ
+                Read replicas
+                can only install listed extensions
+            Amazon Aurora PostgreSQL
+                AWS-reimagined Postgres engine
+                Serverless
+                upto 5x faster than RDS
+        Google
+            Cloud SQL for PostgreSQL
+                similar to RDS
+            AlloyDB for PostgreSQL
+                similar to Aurora
+        Serveless
+            Neon, Supabase, Citus
+        Containerization
+            Docker
+                run postgresql in docker locally
+        Schema migrations
+            Flyway
+                migrations as versioned SQL files
+            Liquibase
+                more flexible, migrations as XML, YAML, JSON or SQL
 
 """
