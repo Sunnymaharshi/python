@@ -26,31 +26,54 @@ Classes
     __doc__ property
         returns doc string written inside the class
 """
+
+
 class Student:
-    def __init__(self,name,grades):
+    def __init__(self, name, grades):
         self.name = name
         self.grades = grades
-    def average(self):
-        return sum(self.grades)/len(self.grades)
 
-ajay = Student('Ajay Kumar',[79,68,90])
+    def average(self):
+        return sum(self.grades) / len(self.grades)
+
+
+ajay = Student("Ajay Kumar", [79, 68, 90])
 # print(ajay.name,ajay.grades,ajay.average())
+
 
 # Inheritance
 class WorkingStudent(Student):
-    def __init__(self,name,grades,salary):
-        super().__init__(name,grades)
+    def __init__(self, name, grades, salary):
+        super().__init__(name, grades)
         self.salary = salary
+
     @property
     def get_monthly_salary(self):
         return self.salary * 30
-rakesh = WorkingStudent("Rakesh",[20,38,41],890)
+
+
+rakesh = WorkingStudent("Rakesh", [20, 38, 41], 890)
 # print(rakesh.average())
 # print(rakesh.get_monthly_salary)
 
 """
 decorators
     adds additional functionality to the functions
+    function that takes another function and returns a modified version of it.
+    decorators run bottom-up, closest one to the function runs first
+    @app.get("/path") is FastAPI registering your function as a route handler
+    ex: # Writing your own decorator
+        def log_call(func):
+            async def wrapper(*args, **kwargs):
+                print(f"Calling {func.__name__}")
+                result = await func(*args, **kwargs)
+                print("Done")
+                return result
+            return wrapper
+
+        @log_call
+        @app.get("/items")
+        async def list_items():
     @property
         make function as a property
         only used if function doesn't take any arguments
@@ -76,10 +99,13 @@ instance methods
 classmethod preffered than static method
 you can add ur parameters to these as u like
 """
+
+
 class ClassTest:
     static_prop = 1
+
     def __init__(self):
-        pass  
+        pass
 
     def instance_method(self):
         print(f"instance method of {self}")
@@ -91,6 +117,7 @@ class ClassTest:
     @staticmethod
     def static_method():
         print(f"static method")
+
 
 ClassTest.static_method()
 ClassTest.class_method()
@@ -125,8 +152,8 @@ lambda functions
     has no name
     only returns single expression
 """
-add = lambda x,y : x+y
-no_params = lambda : 1
+add = lambda x, y: x + y
+no_params = lambda: 1
 # print(add(1,2))
 # print(no_params())
 
@@ -142,33 +169,59 @@ arguments unpacking
         with key as name and value as argument
 
 """
-def some_args(*args,**kwargs):
-    print(args,kwargs)
+
+
+def some_args(*args, **kwargs):
+    print(args, kwargs)
+
 
 # some_args(1,2,3,four=4,five=5)
 # (1, 2, 3) {'four': 4, 'five': 5}
 
 """
 context manager
-    to do something after executing a block of code
+    guaranteed setup and teardown logic
+    object that defines __enter__ and __exit__. 
+    Python's with is syntactic sugar for try/finally.
+    The with statement calls enter before the code block and exit after, even if an exception is thrown.
     ex: with ... as ...:
             pass    
+    This is how DB connections guarantee they're closed,
+    how FastAPI dependencies clean up after a request.
+
 """
-with open('README.md','r') as f:
+with open("README.md", "r") as f:
     # print(f.read())
     pass
 # closes the file connection after exiting the with block
+
+"""
+# Manual try/finally (what "with" replaces)
+conn = get_connection()
+try:
+    result = conn.execute(query)
+finally:
+    conn.close()  # Always runs
+
+# Context manager cleaner, same guarantee
+with get_connection() as conn:
+    result = conn.execute(query)
+# conn.close() called automatically
+"""
+
 
 # custom context manager
 class DBConnection:
     def __init__(self):
         self.connection = None
+
     def __enter__(self):
-        self.connection = None # connection variable
+        self.connection = None  # connection variable
         print("creating connection")
         return self.connection
+
     # exception type, value and traceback
-    def __exit__(self,exc_type,exc_val,exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb):
         # commit and close the connection
         print("commited and closed connection")
 
@@ -226,17 +279,21 @@ Typing in python
 
 """
 """ Generator function """
+
+
 def firstn_gen(n):
     num = 0
     while num < n:
         yield num
         num += 1
+
+
 first5 = firstn_gen(5)
-# print(first5)      
+# print(first5)
 # <generator object firstn_gen at 0x7f016bdfcd60>
 # for i in first5:
 #     print(i,end=" ")
-# 0 1 2 3 4 
+# 0 1 2 3 4
 
 """ Generator expression """
 first3 = (i for i in range(3))
@@ -247,9 +304,11 @@ first3 = (i for i in range(3))
 
 """ Generator Class """
 
+
 class FirstTenGenerator:
     def __init__(self):
         self.number = 0
+
     def __next__(self):
         if self.number < 10:
             current = self.number
@@ -257,15 +316,19 @@ class FirstTenGenerator:
             return current
         else:
             raise StopIteration()
+
 
 # for i in FirstTenGenerator():
 #     print(i)
 # 'FirstTenGenerator' object is not iterable
 
 """ Iterable Class """
+
+
 class FirstTenIterator:
     def __init__(self):
         self.number = 0
+
     def __next__(self):
         if self.number < 10:
             current = self.number
@@ -273,11 +336,13 @@ class FirstTenIterator:
             return current
         else:
             raise StopIteration()
-    # this makes generator class iterable 
+
+    # this makes generator class iterable
     def __iter__(self):
         # returning iterator object
         return self
-        
+
+
 # for i in FirstTenIterator():
 #     print(i, end=" ")
 # 0 1 2 3 4 5 6 7 8 9
