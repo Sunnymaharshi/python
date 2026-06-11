@@ -363,3 +363,62 @@ collections
         append,appendleft
         pop,popleft  
 """
+
+"""
+    __init__.py files in folders
+        Make each folder a Python package
+        they can be empty,  Python just needs them to recognize the directories as packages.
+        Enables proper imports
+            from src.app.main import app
+        used for 
+            Package Initialization
+                Running setup code when the package is loaded.
+            Exposing a Clean API
+                Simplifying how other developers import code from your package.
+            Controlling Exports
+                Defining exactly what gets exported using __all__
+                from .graphics import render_player
+                from .audio import play_sound
+                # Only these two functions will be imported if someone uses 'import *'
+                __all__ = ['render_player', 'play_sound']
+"""
+
+"""
+asyncio
+    Python's built-in tool for handling cooperative multitasking
+    provides the async and await syntax and manages the Event Loop.
+    Everything runs on a single thread called the Event Loop
+    A task can still be paused (at an await statement) in the middle of a critical operation. 
+    If another task steps in and modifies the same shared data before the first task resumes
+    you get a race condition.
+    asyncio.Lock
+        ensures that only one task can enter a specific critical section of code at a time.
+        Other tasks attempting to enter will pause and wait until the lock is released.
+        ex: import asyncio
+            lock = asyncio.Lock() # Create the lock
+            counter = 0
+            async def increment():
+                global counter
+                async with lock:
+                    temp = counter
+                    await asyncio.sleep(1)
+                    counter = temp + 1
+        manual 
+            await lock.acquire()
+            try:
+                # critical section
+                pass
+            finally:
+                lock.release()
+        preferred
+            async with lock:
+                # critical section
+                pass
+asyncio.Lock vs threading.Lock
+    Feature	            asyncio.Lock	        threading.Lock
+    Used with	        Coroutines	            Threads
+    Acquire	            await lock.acquire()	lock.acquire()
+    Context manager	    async with	            with
+    Blocks event loop?	No	                    Yes
+    Thread-safe?	    No	                    Yes
+"""

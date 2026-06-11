@@ -11,7 +11,4 @@ Cursor
 
 ?: used for parameterized queries to prevent SQL injection
     ex: cursor.execute("SELECT * FROM table_name WHERE column1 = ?", (value1,))
-    context manager for database connections
-        allows you to automatically manage the connection and ensure it is properly closed after use
-        automatically commits transactions if no exceptions occur, or rolls back if an exception is raised
 """

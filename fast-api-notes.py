@@ -293,6 +293,91 @@ Fast API
         --workers N), each with its own loop and pool — that's your horizontal scaling knob across CPU
         cores, separate from the async/thread-pool concurrency model within a single process.
 
+    SQLAlchemy
+        Models & Base
+            class Base(DeclarativeBase):
+                pass
+            class User(Base):
+                __tablename__ = "users"
+                id: Mapped[int]          = mapped_column(primary_key=True)
+                email: Mapped[str]       = mapped_column(String(255), unique=True, index=True)
+                name: Mapped[str | None] = mapped_column(String(100))
+                posts: Mapped[list["Post"]] = relationship(back_populates="author", lazy="select")
+        Relationships
+            One-to-many
+                class User(Base):
+                    __tablename__ = "users"
+                    id:    Mapped[int]         = mapped_column(primary_key=True)
+                    posts: Mapped[list["Post"]] = relationship(
+                        "Post",
+                        back_populates="author",
+                        lazy="select",          # or "joined", "subquery", "dynamic", "raise"
+                        cascade="all, delete-orphan",
+                    )
+                cascade="all, delete-orphan" — deleting a user deletes all their posts.
+            Many-to-many
+                class Post(Base):
+                    __tablename__ = "posts"
+                    id:   Mapped[int]        = mapped_column(primary_key=True)
+                    tags: Mapped[list["Tag"]] =
+                        relationship("Tag", secondary=post_tags, back_populates="posts")
+                class Tag(Base):
+                    __tablename__ = "tags"
+                    id:    Mapped[int]        = mapped_column(primary_key=True)
+                    name:  Mapped[str]        = mapped_column(String(50), unique=True)
+                    posts: Mapped[list["Post"]] =
+                        relationship("Post", secondary=post_tags, back_populates="tags")
+            One-one
+                class User(Base):
+                    ...
+                    profile: Mapped["Profile | None"] = relationship(back_populates="user", uselist=False)
+        Lazy loading strategies
+            lazy="select" (default)
+                Separate SELECT on first access.
+                tells the ORM not to fetch the related object when you first query the parent object
+                separate SELECT database query is executed only when you explicitly access
+                that specific attribute in your code
+                Easy but causes N+1.
+            lazy="joined"
+                LEFT OUTER JOIN in one query.
+                Best for small related sets loaded always.
+            lazy="subquery"
+                One extra subquery per collection.
+                Good for large collections without cartesian explosion.
+            lazy="raise"
+                Raises exception on access. Enforces explicit eager loading
+                great for prod safety
+            N+1 is the #1 SQLAlchemy performance killer.
+            Use lazy="raise" in production and explicit selectinload() / joinedload() per query.
+        Eager loading
+            selectinload
+                2 queries, no data duplication — use for collections
+                users = session.scalars(
+                    select(User).options(
+                        selectinload(User.posts).selectinload(Post.tags)
+                    )
+                ).all()
+            joinedload
+                1 query, JOIN — use for to-one (author, profile)
+                posts = session.scalars(
+                    select(Post).options(
+                        joinedload(Post.author),
+                        joinedload(Post.category),
+                    )
+                ).unique().all()
+        Engine setup
+            engine = create_engine(
+                "postgresql+psycopg2://user:pass@localhost/mydb",
+                pool_size=10,           # persistent connections
+                max_overflow=20,        # extra connections allowed
+                pool_pre_ping=True,     # validates connection before use (avoids stale conns)
+                pool_recycle=3600,      # recycle connections every hour
+                echo=False,             # True logs all SQL — use only in dev
+            )
+            SessionLocal = sessionmaker(bind=engine,
+                                autoflush=False, autocommit=False, expire_on_commit=False)
+            expire_on_commit=False keeps attribute values accessible after commit without re-querying
+            important in async/API contexts.
     Background tasks
         Fire-and-forget work after responding
         lets you run work after the response is sent,
@@ -315,4 +400,16 @@ Fast API
             anything that needs retry logic
             tasks that must survive a server crash
         Use Celery + Redis for that.
+    Redis Lua scripts
+        let you execute multiple Redis commands atomically on the Redis server itself.
+        This solves many race conditions and reduces network round trips.
+        ex: local balance = tonumber(redis.call("GET", KEYS[1]))
+            if balance >= tonumber(ARGV[1]) then
+                redis.call("DECRBY", KEYS[1], ARGV[1])
+                return 1
+            end
+            return 0
+        Redis guarantees
+            No other client runs commands in the middle.
+            Script runs completely before another command executes.
 """

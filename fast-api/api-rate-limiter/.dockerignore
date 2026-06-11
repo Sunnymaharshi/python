@@ -1,0 +1,36 @@
+# Python
+
+**pycache**/
+_.pyc
+_.pyo
+_.pyd
+.Python
+_.egg-info/
+dist/
+build/
+
+# Virtual env — never copy this into the image
+
+.venv/
+
+# Tests and dev tools — not needed in production image
+
+tests/
+.pytest_cache/
+.ruff_cache/
+
+# Env files — secrets must come from environment, not baked into image
+
+.env
+.env.\*
+
+# Git
+
+.git/
+.gitignore
+
+# IDE
+
+.vscode/
+.idea/
+\*.swp
