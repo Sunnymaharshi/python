@@ -38,6 +38,37 @@ class RedisBackend(BaseBackend):
         lua = self._client.register_script(script)
         return await lua(keys=keys, args=args)
 
+    # ── Sorted set operations (used by sliding window) ────────────────────────
+    # These map directly to Redis sorted set commands.
+    # Sorted sets store members ordered by score — perfect for timestamps.
+
+    async def zadd(self, key: str, score: float, member: str) -> int:
+        """
+        Add a member with a score to the sorted set.
+        In sliding window: score = timestamp, member = str(timestamp)
+        Returns number of elements added.
+        """
+        return await self._client.zadd(key, {member: score})
+
+    async def zcard(self, key: str) -> int:
+        """
+        Return the number of members in the sorted set.
+        In sliding window: this is the request count within the current window.
+        O(1) operation.
+        """
+        return await self._client.zcard(key)
+
+    async def zremrangebyscore(
+        self, key: str, min_score: float, max_score: float
+    ) -> int:
+        """
+        Remove all members with scores between min_score and max_score (inclusive).
+        In sliding window: removes all timestamps older than (now - window).
+        This keeps the sorted set from growing unboundedly.
+        Returns number of elements removed.
+        """
+        return await self._client.zremrangebyscore(key, min_score, max_score)
+
     async def close(self) -> None:
         await self._client.aclose()
         await self._pool.aclose()
