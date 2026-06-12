@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from rate_limiter.algorithms.fixed_window import FixedWindowAlgorithm
+from rate_limiter.algorithms.leaky_bucket import LeakyBucketAlgorithm
 from rate_limiter.algorithms.sliding_window import SlidingWindowAlgorithm
 from rate_limiter.algorithms.token_bucket import TokenBucketAlgorithm
 from rate_limiter.backends.memory import InMemoryBackend
@@ -21,12 +22,13 @@ backend: RedisBackend | InMemoryBackend | None = None
 fixed_window: FixedWindowAlgorithm | None = None
 sliding_window: SlidingWindowAlgorithm | None = None
 token_bucket: TokenBucketAlgorithm | None = None
+leaky_bucket: LeakyBucketAlgorithm | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Connect to Redis on startup, clean up on shutdown."""
-    global backend, fixed_window, sliding_window, token_bucket
+    global backend, fixed_window, sliding_window, token_bucket, leaky_bucket
 
     logger.info("Connecting to Redis at %s", settings.redis_url)
     try:
@@ -45,9 +47,8 @@ async def lifespan(app: FastAPI):
     fixed_window = FixedWindowAlgorithm(backend)
     sliding_window = SlidingWindowAlgorithm(backend)
     token_bucket = TokenBucketAlgorithm(backend)
-    logger.info(
-        "Rate limiter ready (algorithms: fixed_window, sliding_window, token_bucket)"
-    )
+    leaky_bucket = LeakyBucketAlgorithm(backend)
+    logger.info("Rate limiter ready (all 4 algorithms loaded)")
 
     yield  # app runs here
 
@@ -110,6 +111,7 @@ async def root():
             "fixed_window": "/api/demo",
             "sliding_window": "/api/demo-sliding",
             "token_bucket": "/api/demo-token-bucket",
+            "leaky_bucket": "/api/demo-leaky-bucket",
         },
         "docs": "/docs",
     }
@@ -213,8 +215,8 @@ async def demo_token_bucket(request: Request):
             status_code=429,
             content={
                 "error": "rate_limit_exceeded",
-                "message": "Rate limit exceeded",
-                "retry_after": f"{result.retry_after}s",
+                "message": f"Rate limit exceeded. Try again in {result.retry_after}s.",
+                "retry_after": result.retry_after,
             },
             headers=headers,
         )
@@ -225,6 +227,46 @@ async def demo_token_bucket(request: Request):
             "algorithm": "token_bucket",
             "timestamp": int(time.time()),
             "burst_allowance": burst,
+            "rate_limit": {
+                "limit": result.limit,
+                "remaining": result.remaining,
+                "reset_at": result.reset_at,
+            },
+        },
+        headers=headers,
+    )
+
+
+@app.get("/api/demo-leaky-bucket")
+async def demo_leaky_bucket(request: Request):
+    """
+    Demo endpoint protected by leaky bucket rate limiting.
+    Enforces a strict constant output rate — no bursts allowed.
+    Default: 10 requests per 60 seconds.
+    """
+    key = get_client_key(request, "demo-leaky-bucket")
+    limit = int(request.headers.get("X-Rate-Limit", "10"))
+    window = int(request.headers.get("X-Rate-Window", "60"))
+
+    result = await leaky_bucket.check(key=key, limit=limit, window=window)
+    headers = rate_limit_headers(result)
+
+    if not result.allowed:
+        return JSONResponse(
+            status_code=429,
+            content={
+                "error": "rate_limit_exceeded",
+                "message": f"Queue full. Try again in {result.retry_after}s.",
+                "retry_after": result.retry_after,
+            },
+            headers=headers,
+        )
+
+    return JSONResponse(
+        content={
+            "message": "Request queued and allowed",
+            "algorithm": "leaky_bucket",
+            "timestamp": int(time.time()),
             "rate_limit": {
                 "limit": result.limit,
                 "remaining": result.remaining,

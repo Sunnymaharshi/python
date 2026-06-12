@@ -92,41 +92,84 @@ class InMemoryBackend(BaseBackend):
     async def execute_lua(self, script: str, keys: list[str], args: list) -> object:
         async with self._lock:
             key = keys[0]
-            capacity = float(args[0])
-            refill_rate = float(args[1])
-            now = float(args[2])
-            requested = float(args[3])
-            burst_allowance = float(args[4]) if len(args) > 4 else 0
-            max_tokens = capacity + burst_allowance
 
-            if self._is_expired(key):
-                tokens = max_tokens  # Initialize with full bucket
+            # Detect which algorithm script is being run by arg count and script content
+            # Leaky bucket: 3 args (capacity, leak_rate, now) + "drained" in script
+            # Token bucket: 5 args (capacity, refill_rate, now, requested, burst)
+            is_leaky = len(args) == 3 or "drained" in script or "queue_size" in script
+
+            if is_leaky:
+                return self._leaky_bucket_lua(key, args)
+            else:
+                return self._token_bucket_lua(key, args)
+
+    def _token_bucket_lua(self, key: str, args: list) -> list:
+        """Emulate token bucket Lua script."""
+        capacity = float(args[0])
+        refill_rate = float(args[1])
+        now = float(args[2])
+        requested = float(args[3]) if len(args) > 3 else 1.0
+        burst_allowance = float(args[4]) if len(args) > 4 else 0
+        max_tokens = capacity + burst_allowance
+
+        if self._is_expired(key):
+            tokens = max_tokens
+            last_refill = now
+        else:
+            raw, _ = self._store.get(key, ("", None))
+            if raw:
+                parts = raw.split(":")
+                tokens = float(parts[0])
+                last_refill = float(parts[1])
+            else:
+                tokens = max_tokens
                 last_refill = now
+
+        elapsed = now - last_refill
+        tokens = min(max_tokens, tokens + elapsed * refill_rate)
+
+        if tokens >= requested:
+            tokens -= requested
+            allowed = 1
+        else:
+            allowed = 0
+
+        expire_at = time.time() + int(max_tokens / refill_rate) + 10
+        self._store[key] = (f"{tokens}:{now}", expire_at)
+        return [allowed, int(tokens), str(tokens)]
+
+    def _leaky_bucket_lua(self, key: str, args: list) -> list:
+        """Emulate leaky bucket Lua script."""
+        capacity = float(args[0])
+        leak_rate = float(args[1])
+        now = float(args[2])
+
+        if self._is_expired(key):
+            queue_size = 0.0
+            last_drain = now
+        else:
+            raw, _ = self._store.get(key, ("", None))
+            if raw:
+                parts = raw.split(":")
+                queue_size = float(parts[0])
+                last_drain = float(parts[1])
             else:
-                raw, _ = self._store.get(key, ("", None))
-                if raw:
-                    parts = raw.split(":")
-                    tokens = float(parts[0])
-                    last_refill = float(parts[1])
-                else:
-                    tokens = max_tokens
-                    last_refill = now
+                queue_size = 0.0
+                last_drain = now
 
-            elapsed = now - last_refill
-            tokens = tokens + elapsed * refill_rate
+        elapsed = now - last_drain
+        drained = int(elapsed * leak_rate)  # whole units only
+        queue_size = max(0.0, queue_size - drained)
 
-            # Cap at capacity + burst
-            tokens = min(max_tokens, tokens)
+        if queue_size < capacity:
+            queue_size += 1
+            allowed = 1
+        else:
+            allowed = 0
 
-            if tokens >= requested:
-                tokens -= requested
-                allowed = 1
-            else:
-                allowed = 0
-
-            expire_at = time.time() + int(capacity / refill_rate) + 10
-            self._store[key] = (f"{tokens}:{now}", expire_at)
-            return [allowed, int(tokens)]
+        expire_at = time.time() + int(capacity / leak_rate) + 10
+        self._store[key] = (f"{queue_size}:{now}", expire_at)
+        return [allowed, int(queue_size)]
 
     async def close(self) -> None:
         self._store.clear()

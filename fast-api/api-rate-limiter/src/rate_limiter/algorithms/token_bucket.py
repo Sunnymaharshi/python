@@ -16,6 +16,10 @@ Redis implementation:
   - On each request: compute elapsed time, refill tokens, then check/consume
   - Use a Lua script to make this atomic — no race conditions
 
+  refill_rate = capacity/window   -- tokens per sec
+  tokens_added = time x refill_rate
+  time_needed = tokens_added/refill_rate
+
 Tradeoff:
   ✓ Allows configurable bursts — smooth out traffic spikes
   ✓ Guarantees long-term rate (avg tokens/sec stays constant)
