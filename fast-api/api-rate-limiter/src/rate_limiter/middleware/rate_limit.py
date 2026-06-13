@@ -25,6 +25,7 @@ The decorator injects rate limit headers into every response:
 
 import functools
 import logging
+import time as _time
 from typing import Literal
 
 from fastapi import Request
@@ -142,8 +143,9 @@ def rate_limit(
             route_path = request.url.path.replace("/", "_")
             rl_key = f"rl:{algorithm}:{caller_key}:{route_path}"
 
-            # Run the check
+            # Run the check + time it for Prometheus
             algo = _get_algorithm(request, algorithm)
+            t0 = _time.monotonic()
 
             if algorithm == "token_bucket":
                 result = await algo.check(
@@ -158,6 +160,18 @@ def rate_limit(
                     limit=limit,
                     window=window,
                 )
+
+            duration = _time.monotonic() - t0
+
+            # Record to Prometheus (import lazily so metrics module is optional)
+            try:
+                from rate_limiter.api.metrics import record as _record
+                from rate_limiter.config import settings
+
+                if settings.metrics_enabled:
+                    _record(algorithm, key_by, result.allowed, duration)
+            except Exception:
+                pass  # never let metrics crash the request
 
             headers = _build_headers(result)
 

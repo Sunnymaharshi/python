@@ -9,6 +9,7 @@ from rate_limiter.algorithms.fixed_window import FixedWindowAlgorithm
 from rate_limiter.algorithms.leaky_bucket import LeakyBucketAlgorithm
 from rate_limiter.algorithms.sliding_window import SlidingWindowAlgorithm
 from rate_limiter.algorithms.token_bucket import TokenBucketAlgorithm
+from rate_limiter.api.metrics import metrics_endpoint
 from rate_limiter.backends.memory import InMemoryBackend
 from rate_limiter.backends.redis import RedisBackend
 from rate_limiter.config import settings
@@ -82,6 +83,12 @@ async def root():
 async def health(request: Request):
     backend_type = type(request.app.state.backend).__name__
     return {"status": "ok", "backend": backend_type}
+
+
+@app.get("/metrics")
+async def metrics(request: Request):
+    """Prometheus metrics endpoint."""
+    return await metrics_endpoint(request)
 
 
 # ── Demo routes — one decorator line each ─────────────────────────────────────
