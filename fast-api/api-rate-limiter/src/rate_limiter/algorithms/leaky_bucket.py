@@ -17,6 +17,7 @@ How it works:
     meaning one slot frees up roughly every 6 seconds.
     The math.floor is crucial — we only drain whole completed units, not fractional ones.
 Redis implementation:
+  - we only need 1 key per user & url, in redis
   - Track (queue_size, last_drain_time) to simulate the leak.
   - On each request: compute how much has drained since last request, decrement queue.
   - If queue < capacity: allow (queue++); otherwise reject.

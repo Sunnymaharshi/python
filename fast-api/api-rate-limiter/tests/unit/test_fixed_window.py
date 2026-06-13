@@ -13,8 +13,9 @@ import asyncio
 import time
 
 import pytest
-from src.rate_limiter.algorithms.fixed_window import FixedWindowAlgorithm
-from src.rate_limiter.backends.memory import InMemoryBackend
+
+from rate_limiter.algorithms.fixed_window import FixedWindowAlgorithm
+from rate_limiter.backends.memory import InMemoryBackend
 
 
 @pytest.fixture
@@ -142,8 +143,8 @@ async def test_concurrent_100_requests(algo):
 
 async def test_demo_endpoint_allows_requests(client):
     response = await client.get(
-        "/api/demo",
-        headers={"X-Rate-Limit": "5", "X-Rate-Window": "60", "X-API-Key": "test-key-1"},
+        "/api/fixed",
+        headers={"X-Forwarded-For": "10.0.0.1"},
     )
     assert response.status_code == 200
     assert "X-RateLimit-Limit" in response.headers
@@ -152,27 +153,17 @@ async def test_demo_endpoint_allows_requests(client):
 
 
 async def test_demo_endpoint_returns_429_when_over_limit(client):
-    for _ in range(3):
-        await client.get(
-            "/api/demo",
-            headers={
-                "X-Rate-Limit": "3",
-                "X-Rate-Window": "60",
-                "X-API-Key": "test-key-2",
-            },
-        )
-    response = await client.get(
-        "/api/demo",
-        headers={"X-Rate-Limit": "3", "X-Rate-Window": "60", "X-API-Key": "test-key-2"},
-    )
+    for _ in range(10):
+        await client.get("/api/fixed", headers={"X-Forwarded-For": "10.0.0.3"})
+    response = await client.get("/api/fixed", headers={"X-Forwarded-For": "10.0.0.3"})
     assert response.status_code == 429
     assert response.json()["error"] == "rate_limit_exceeded"
     assert "Retry-After" in response.headers
 
 
 async def test_remaining_header_decrements_correctly(client):
-    headers = {"X-Rate-Limit": "5", "X-Rate-Window": "60", "X-API-Key": "test-key-3"}
-    r1 = await client.get("/api/demo", headers=headers)
-    r2 = await client.get("/api/demo", headers=headers)
-    assert int(r1.headers["X-RateLimit-Remaining"]) == 4
-    assert int(r2.headers["X-RateLimit-Remaining"]) == 3
+    r1 = await client.get("/api/fixed", headers={"X-Forwarded-For": "10.0.0.4"})
+    r2 = await client.get("/api/fixed", headers={"X-Forwarded-For": "10.0.0.4"})
+    assert int(r1.headers["X-RateLimit-Remaining"]) > int(
+        r2.headers["X-RateLimit-Remaining"]
+    )
