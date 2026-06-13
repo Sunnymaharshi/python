@@ -159,7 +159,16 @@ class InMemoryBackend(BaseBackend):
 
         elapsed = now - last_drain
         drained = int(elapsed * leak_rate)  # whole units only
-        queue_size = max(0.0, queue_size - drained)
+
+        # Only advance last_drain by time for whole drained units
+        # Preserves partial time toward the next drain slot
+        if drained > 0:
+            queue_size = max(0.0, queue_size - drained)
+            last_drain = last_drain + (drained / leak_rate)
+
+        # Reset last_drain if bucket fully empty — prevents float drift
+        if queue_size == 0:
+            last_drain = now
 
         if queue_size < capacity:
             queue_size += 1
@@ -168,7 +177,7 @@ class InMemoryBackend(BaseBackend):
             allowed = 0
 
         expire_at = time.time() + int(capacity / leak_rate) + 10
-        self._store[key] = (f"{queue_size}:{now}", expire_at)
+        self._store[key] = (f"{queue_size}:{last_drain}", expire_at)
         return [allowed, int(queue_size)]
 
     async def close(self) -> None:

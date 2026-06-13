@@ -9,7 +9,9 @@ from rate_limiter.algorithms.fixed_window import FixedWindowAlgorithm
 from rate_limiter.algorithms.leaky_bucket import LeakyBucketAlgorithm
 from rate_limiter.algorithms.sliding_window import SlidingWindowAlgorithm
 from rate_limiter.algorithms.token_bucket import TokenBucketAlgorithm
+from rate_limiter.api.dashboard import dashboard_route
 from rate_limiter.api.metrics import metrics_endpoint
+from rate_limiter.api.stats import _get_stats
 from rate_limiter.backends.memory import InMemoryBackend
 from rate_limiter.backends.redis import RedisBackend
 from rate_limiter.config import settings
@@ -75,7 +77,9 @@ async def root():
             "token_bucket": "/api/token",
             "leaky_bucket": "/api/leaky",
         },
+        "dashboard": "/dashboard",
         "docs": "/docs",
+        "metrics": "/metrics",
     }
 
 
@@ -89,6 +93,18 @@ async def health(request: Request):
 async def metrics(request: Request):
     """Prometheus metrics endpoint."""
     return await metrics_endpoint(request)
+
+
+@app.get("/api/stats")
+async def stats():
+    """Live stats polled by the dashboard every 2 seconds."""
+    return _get_stats()
+
+
+@app.get("/dashboard")
+async def dashboard():
+    """Live dashboard — charts of allowed/denied per algorithm."""
+    return await dashboard_route()
 
 
 # ── Demo routes — one decorator line each ─────────────────────────────────────

@@ -175,7 +175,46 @@ The critical correctness property: under N concurrent requests, exactly `limit` 
 
 **Token Bucket and Leaky Bucket** both use Lua scripts via `EVAL`. Redis executes Lua atomically — the entire script runs before any other command is processed. This makes the read-compute-write cycle race-condition-free regardless of concurrency.
 
-## Prometheus Metrics
+## Redis Key Storage
+
+How many keys each algorithm stores and how much memory they use:
+
+| Algorithm      | Keys per user | Key TTL                          | Memory per user                           |
+| -------------- | ------------- | -------------------------------- | ----------------------------------------- |
+| Fixed Window   | 1 per window  | `window + 1s`                    | ~50 bytes                                 |
+| Sliding Window | 1 always      | `window + 10s`                   | ~40 bytes + 20 bytes × requests in window |
+| Token Bucket   | 1 always      | `(capacity / refill_rate) + 10s` | ~60 bytes                                 |
+| Leaky Bucket   | 1 always      | `(capacity / leak_rate) + 10s`   | ~60 bytes                                 |
+
+**Fixed Window** creates a new key every window period (e.g. one key per 60 seconds per user). Old keys auto-expire. At any time there's at most 1 active key per user per route. Value is a single integer counter.
+
+```
+rl:fixed:ip:1.2.3.4:_api_data:1718000000  →  "42"
+```
+
+**Sliding Window** keeps 1 key per user per route, but the value is a sorted set containing one member per request within the current window. Memory grows linearly with traffic: 1000 req/min × 20 bytes ≈ 20KB per user. The `ZREMRANGEBYSCORE` call prunes old entries on every request so it never grows beyond `limit` members.
+
+```
+rl:sliding:ip:1.2.3.4:_api_data  →  sorted set {
+  "1718000001.123": 1718000001.123,
+  "1718000005.456": 1718000005.456,
+  ...up to `limit` members
+}
+```
+
+**Token Bucket** stores exactly one key per user per route. Value is a compact `"tokens:timestamp"` string. Memory is constant regardless of traffic volume.
+
+```
+rl:token:ip:1.2.3.4:_api_data  →  "8.5:1718000042.301"
+```
+
+**Leaky Bucket** same as token bucket — one key, constant memory.
+
+```
+rl:leaky:ip:1.2.3.4:_api_data  →  "3:1718000038.100"
+```
+
+**At scale:** For 10,000 concurrent users, token bucket / leaky bucket / fixed window use ≈ 600KB each. Sliding window at 100 req/min per user uses ≈ 20MB. All keys have TTLs so Redis never accumulates stale data.
 
 ```
 # Requests by algorithm and outcome

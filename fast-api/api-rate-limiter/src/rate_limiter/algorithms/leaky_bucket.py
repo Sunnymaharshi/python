@@ -107,12 +107,26 @@ class LeakyBucketAlgorithm(BaseAlgorithm):
               last_drain = tonumber(parts[2])
             end
             
-            -- Calculate how much has drained since last request (integer units only)
+            -- Calculate how much has drained since last request
             local elapsed = now - last_drain
             local drained = math.floor(elapsed * leak_rate)
             
-            -- Update queue: remove only whole drained units
-            queue_size = math.max(0, queue_size - drained)
+            -- CRITICAL: Instead of setting last_drain = now, 
+            -- we calculate exactly how long it took to drain whole units (drained/leak_rate)
+            -- and add only that amount to our baseline timer.
+            -- This preserves the partial time accumulated toward the next drain slot.
+            -- e.g. leak_rate=0.167/s, elapsed=3.5s → drained=0, last_drain unchanged
+            --      → the 3.5s keeps accumulating toward the next whole unit (6s threshold)
+            if drained > 0 then
+              queue_size = math.max(0, queue_size - drained)
+              last_drain = last_drain + (drained / leak_rate)
+            end
+            
+            -- If bucket fully drained, reset last_drain to now.
+            -- Prevents float drift after long idle periods.
+            if queue_size == 0 then
+              last_drain = now
+            end
             
             -- Check if we can add this request to the queue
             local allowed = 0
@@ -121,9 +135,9 @@ class LeakyBucketAlgorithm(BaseAlgorithm):
               queue_size = queue_size + 1
             end
             
-            -- Save state (always update last_drain to current time)
+            -- Save state
             local ttl = math.ceil((capacity / leak_rate) + 10)
-            redis.call('SET', key, queue_size .. ':' .. now, 'EX', ttl)
+            redis.call('SET', key, queue_size .. ':' .. last_drain, 'EX', ttl)
             
             -- Return [allowed, queue_size_after]
             return {allowed, math.floor(queue_size)}
@@ -148,10 +162,12 @@ class LeakyBucketAlgorithm(BaseAlgorithm):
 
         retry_after = None
         if not allowed:
-            # How long until the next slot becomes available?
-            # = time for one request to fully drain
-            time_to_drain_one = 1.0 / (capacity / window)
-            retry_after = max(1, int(time_to_drain_one) + 1)
+            # Time (seconds) until one slot drains = 1 / leak_rate
+            # Use ceiling so clients don't retry too early
+            import math
+
+            time_per_slot = 1.0 / leak_rate  # e.g. 6.0s for limit=10/60s
+            retry_after = math.ceil(time_per_slot)  # always at least 1s
 
         return RateLimitResult(
             allowed=allowed,
