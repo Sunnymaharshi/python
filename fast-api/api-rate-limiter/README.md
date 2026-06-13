@@ -20,7 +20,7 @@ A production-grade rate limiting library built with FastAPI and Redis. Implement
 docker compose up --build
 
 # Try it
-curl http://localhost:8000/api/token
+curl http://localhost:8000/api/fixed
 curl http://localhost:8000/metrics
 ```
 
@@ -164,7 +164,7 @@ Generate traffic to see it update:
 
 ```bash
 # Run this while the dashboard is open
-watch -n 0.5 'curl -s http://localhost:8000/api/token \
+watch -n 0.5 'curl -s http://localhost:8000/api/sliding \
   -H "X-Forwarded-For: 10.0.0.1" > /dev/null && \
   curl -s http://localhost:8000/api/fixed \
   -H "X-Forwarded-For: 10.0.0.1" > /dev/null'
