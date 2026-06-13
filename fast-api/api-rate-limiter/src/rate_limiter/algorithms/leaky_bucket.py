@@ -167,7 +167,7 @@ class LeakyBucketAlgorithm(BaseAlgorithm):
             import math
 
             time_per_slot = 1.0 / leak_rate  # e.g. 6.0s for limit=10/60s
-            retry_after = math.ceil(time_per_slot)  # always at least 1s
+            retry_after = math.ceil(time_per_slot)
 
         return RateLimitResult(
             allowed=allowed,
