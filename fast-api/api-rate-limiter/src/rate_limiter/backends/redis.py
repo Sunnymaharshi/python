@@ -69,6 +69,19 @@ class RedisBackend(BaseBackend):
         """
         return await self._client.zremrangebyscore(key, min_score, max_score)
 
+    async def zrange_with_scores(
+        self, key: str, start: int, stop: int
+    ) -> list[tuple[str, float]]:
+        """
+        Return a range of (member, score) pairs ordered by score ascending.
+        In sliding window: zrange_with_scores(key, 0, 0) returns the OLDEST
+        timestamp still in the window — needed to compute accurate
+        reset_at / retry_after (the oldest entry is the next one to expire
+        out of the window).
+        """
+        result = await self._client.zrange(key, start, stop, withscores=True)
+        return [(member, score) for member, score in result]
+
     async def close(self) -> None:
         await self._client.aclose()
         await self._pool.aclose()

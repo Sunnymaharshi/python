@@ -51,6 +51,7 @@ When to use:
 
 """
 
+import math
 import time
 
 from rate_limiter.backends.base import BaseBackend
@@ -139,8 +140,10 @@ class LeakyBucketAlgorithm(BaseAlgorithm):
             local ttl = math.ceil((capacity / leak_rate) + 10)
             redis.call('SET', key, queue_size .. ':' .. last_drain, 'EX', ttl)
             
-            -- Return [allowed, queue_size_after]
-            return {allowed, math.floor(queue_size)}
+            -- Return [allowed, queue_size_after, last_drain_as_string].
+            -- last_drain lets Python compute precise retry_after, accounting
+            -- for partial progress already made toward the next drain tick.
+            return {allowed, math.floor(queue_size), tostring(last_drain)}
             """,
             keys=[key],
             args=[str(capacity), str(leak_rate), str(now)],
@@ -148,26 +151,30 @@ class LeakyBucketAlgorithm(BaseAlgorithm):
 
         allowed = bool(result[0])
         queue_size = int(result[1])
+        last_drain = float(result[2])
 
         # remaining = available slots in the bucket
         remaining = max(0, int(capacity) - queue_size)
 
-        # reset_at: when the bucket will be empty (all queued requests drained)
-        # If queue_size is 0, reset is now. Otherwise, it's now + (queue_size / leak_rate)
+        # reset_at: when the queue will be fully empty again (all slots free),
+        # assuming no further requests arrive.
         if queue_size <= 0:
             reset_at = int(now)
         else:
-            time_to_drain = queue_size / (capacity / window)
+            time_to_drain = queue_size / leak_rate
             reset_at = int(now + time_to_drain)
 
         retry_after = None
         if not allowed:
-            # Time (seconds) until one slot drains = 1 / leak_rate
-            # Use ceiling so clients don't retry too early
-            import math
-
-            time_per_slot = 1.0 / leak_rate  # e.g. 6.0s for limit=10/60s
-            retry_after = math.ceil(time_per_slot)
+            # Time until the NEXT single slot frees up.
+            # last_drain marks when the drain clock last ticked over a whole
+            # unit; (now - last_drain) is partial progress already made
+            # toward the next tick. The remaining time for that tick is:
+            #   (1 / leak_rate) - (now - last_drain)
+            elapsed_since_drain = now - last_drain
+            time_per_slot = 1.0 / leak_rate
+            remaining_time = time_per_slot - elapsed_since_drain
+            retry_after = max(1, math.ceil(remaining_time))
 
         return RateLimitResult(
             allowed=allowed,

@@ -65,14 +65,32 @@ class SlidingWindowAlgorithm(BaseAlgorithm):
                 remaining = limit - count - 1
             else:
                 remaining = 0
+
+            # 4. Find the OLDEST timestamp still in the window — this is the
+            #    next entry that will age out, which is the moment a slot
+            #    frees up / the window's "view" changes.
+            oldest = await self.backend.zrange_with_scores(key, 0, 0)
+            if oldest:
+                oldest_ts = oldest[0][1]
+                reset_at = int(oldest_ts + window)
+            else:
+                # No timestamps left (e.g. just-allowed request was the only one,
+                # or count was 0) — nothing to expire, window is effectively fresh
+                reset_at = int(now + window) if not allowed else int(now)
+
         else:
             # Fallback for backends without sorted set methods
             allowed = False
             remaining = 0
+            reset_at = int(now + window)
 
-        # Determine reset time (when the oldest request in the window expires)
-        reset_at = int(now + window)
-        retry_after = (window + 1) if not allowed else None
+        # retry_after: seconds until the oldest entry ages out of the window,
+        # i.e. exactly (reset_at - now). This is the earliest moment a new
+        # request could be admitted — NOT a flat `window` seconds.
+        if not allowed:
+            retry_after = max(1, int(reset_at - now) or 1)
+        else:
+            retry_after = None
 
         return RateLimitResult(
             allowed=allowed,

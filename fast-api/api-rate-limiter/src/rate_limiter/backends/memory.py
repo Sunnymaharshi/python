@@ -87,6 +87,32 @@ class InMemoryBackend(BaseBackend):
                 return []
             return [m for s, m in self._zsets[key] if min_score <= s <= max_score]
 
+    async def zrange_with_scores(
+        self, key: str, start: int, stop: int
+    ) -> list[tuple[str, float]]:
+        """
+        Return a range of (member, score) pairs ordered by score ascending.
+        zrange_with_scores(key, 0, 0) returns the OLDEST entry — mirrors
+        Redis ZRANGE key 0 0 WITHSCORES.
+        Supports negative indices the same way Redis does (-1 = last element).
+        """
+        async with self._lock:
+            if key not in self._zsets:
+                return []
+            ordered = sorted(self._zsets[key], key=lambda x: x[0])
+            n = len(ordered)
+
+            def normalize(idx, length):
+                return idx + length if idx < 0 else idx
+
+            s = normalize(start, n)
+            e = normalize(stop, n)
+            s = max(0, s)
+            e = min(n - 1, e)
+            if s > e:
+                return []
+            return [(m, sc) for sc, m in ordered[s : e + 1]]
+
     # ── Lua emulation (token bucket only) ────────────────────────────────────
 
     async def execute_lua(self, script: str, keys: list[str], args: list) -> object:
@@ -136,6 +162,7 @@ class InMemoryBackend(BaseBackend):
 
         expire_at = time.time() + int(max_tokens / refill_rate) + 10
         self._store[key] = (f"{tokens}:{now}", expire_at)
+        # Return [allowed, floor(tokens), exact_tokens_string] — matches Lua
         return [allowed, int(tokens), str(tokens)]
 
     def _leaky_bucket_lua(self, key: str, args: list) -> list:
@@ -178,7 +205,8 @@ class InMemoryBackend(BaseBackend):
 
         expire_at = time.time() + int(capacity / leak_rate) + 10
         self._store[key] = (f"{queue_size}:{last_drain}", expire_at)
-        return [allowed, int(queue_size)]
+        # Return [allowed, queue_size_after, last_drain] — matches Lua script
+        return [allowed, int(queue_size), str(last_drain)]
 
     async def close(self) -> None:
         self._store.clear()
