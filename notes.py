@@ -1,3 +1,4 @@
+""" ~~~ Python Classes """
 """
 Classes dunder methods
     __init__(self)
@@ -32,7 +33,7 @@ Classes dunder methods
     __enter__ / __exit__
         see context manager section below
 """
-
+""" ``` 
 class Student:
     def __init__(self, name, grades):
         self.name = name
@@ -60,7 +61,8 @@ class WorkingStudent(Student):
 rakesh = WorkingStudent("Rakesh", [20, 38, 41], 890)
 # print(rakesh.average())
 # print(rakesh.get_monthly_salary)
-
+```
+"""
 """
 MRO (Method Resolution Order)
     determines which class's method is called in multiple inheritance
@@ -70,17 +72,19 @@ MRO (Method Resolution Order)
         Left-to-right order is preserved
     super() 
         looks at the MRO of the calling object's class
-        jumps to the next class in that list.    
-    ex:    A
-         /   \
-        B     C
-         \   /
-           D
+        jumps to the next class in that list. 
+        ```pre   
+        ex:    A
+             /   \
+            B     C
+             \   /
+               D
+        ```
     If Python just went strictly "left-to-right, depth-first," 
     the order would be D -> B -> A -> C -> A. 
     This is bad because A would be visited before C, meaning C's overridden methods might be ignored.
-
 """
+""" ```@1 
 class A:
     def greet(self): print("A")
 
@@ -95,13 +99,14 @@ class D(B, C):  # Diamond
 
 # D().greet()   → B C A  (each class called once, C3 order)
 # D.__mro__     → (D, B, C, A, object)
-
+``` """
 """
 ABC (Abstract Base Class)
     subclasses must implement its abstract methods.
     runtime enforcement, raises TypeError if not, caught at class creation
     use when you want to guarantee a contract AND share implementation
 """
+""" ```@1 
 from abc import ABC, abstractmethod
 
 
@@ -125,7 +130,7 @@ class FileStorage(Storage):
     def save(self, data): pass
     def load(self, key): return ""
 # FileStorage()  → works
-
+``` """
 """
 Protocol (duck typing with types)
     defines an interface without inheritance
@@ -134,6 +139,7 @@ Protocol (duck typing with types)
     preferred over ABC for loosely coupled code
     Compile time enforcement
 """
+""" ```@1
 from typing import Protocol
 
 
@@ -148,7 +154,7 @@ def render(shape: Drawable) -> None:
     shape.draw()
 
 # render(Circle())  → works, Circle never inherits Drawable
-
+``` """
 """
 ABC vs Protocol
     ABC
@@ -173,6 +179,7 @@ Descriptors
     how @property works under the hood
     useful for reusable validation logic across multiple classes
 """
+""" ```@1 
 class Positive:
     def __set_name__(self, owner, name):
         self.name = name
@@ -189,7 +196,7 @@ class Product:
 
 # p = Product()
 # p.price = -1  → ValueError: price must be positive
-
+``` """
 """
 __slots__
     by default, each instance stores attributes in a __dict__ (a hash map)
@@ -197,6 +204,7 @@ __slots__
     can't add arbitrary attributes to instances anymore
     useful for classes you create millions of (events, records, nodes)
 """
+""" ```@1 
 class Point:
     __slots__ = ("x", "y")
     def __init__(self, x, y):
@@ -204,7 +212,7 @@ class Point:
         self.y = y
 # p = Point(1, 2)
 # p.z = 3  → AttributeError
-
+```  """
 """
 Object Creation Lifecycle (__new__ vs __init__)
     __new__ (creator)
@@ -215,6 +223,7 @@ Object Creation Lifecycle (__new__ vs __init__)
         cannot return anything, it must return None.
     Singleton pattern using __new__
 """
+""" ```@1 
 class Singleton:
     _instance = None
     def __new__(cls, *args, **kwargs):
@@ -225,7 +234,7 @@ class Singleton:
 # a = Singleton()
 # b = Singleton()
 # a is b → True
-
+``` """
 """
 Metaprogramming & Hooks
     __init_subclass__
@@ -233,6 +242,7 @@ Metaprogramming & Hooks
         no metaclass needed — cleaner plugin/registry pattern
         cls = the new subclass being created
 """
+""" ```@1 
 class Plugin:
     _registry: dict = {}
 
@@ -246,7 +256,7 @@ class LogPlugin(Plugin, name="log"): pass
 
 # Plugin._registry → {"auth": AuthPlugin, "log": LogPlugin}
 # frameworks like FastAPI/SQLAlchemy use this to auto-register routes/models
-
+``` """
 """
 Metaclasses
     in python, everything is an object, and that includes classes.
@@ -259,6 +269,7 @@ Metaclasses
     still encounter metaclasses in: Django ORM, SQLAlchemy, Pydantic v1
     only write one if you need to intercept class dict before the class object exists
 """
+""" ```@1 
 class SingletonMeta(type):
     _instances = {}
     def __call__(cls, *args, **kwargs):
@@ -270,7 +281,7 @@ class AppConfig(metaclass=SingletonMeta):
     pass
 
 # AppConfig() is AppConfig()  → True
-
+``` """
 """
 dataclasses
     auto-generates __init__, __repr__, __eq__ from field annotations
@@ -288,8 +299,8 @@ dataclasses
         Every time a new Config object is instantiated without a tags argument
         dataclasses call that function list() to generate new, empty list.  
 """
+""" ```@1 
 from dataclasses import dataclass, field
-
 
 @dataclass
 class Config:
@@ -299,7 +310,7 @@ class Config:
 
 # c = Config("localhost")
 # Config(host='localhost', port=8080, tags=[])
-
+``` """
 """
 decorators
     adds additional functionality to the functions
