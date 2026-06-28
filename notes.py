@@ -772,40 +772,36 @@ class CountUpTo:
 # for i in CountUpTo(3): print(i, end=" ")  → 0 1 2
 ```"""
 
-
+""" ~~~ Collections """
 """
-collections
-    Counter
-        dict with count of each element
-        most_common(n) returns top n elements by count
-        supports +, -, & (intersection), | (union) between counters
-
-    defaultdict
-        never raises KeyError — auto-initializes missing keys
-        defaultdict(list)  → missing key gets []
-        defaultdict(int)   → missing key gets 0
-        accessing a missing key CREATES it — don't use for key existence checks
-
-    OrderedDict
-        predates Python 3.7 — regular dict now maintains insertion order
-        still useful for:
-            move_to_end(key) — move a key to front or back
-            equality check cares about order (regular dicts don't)
-            LRU cache implementation
-
-    namedtuple
-        tuple subclass with named fields — immutable
-        more memory efficient than a class or dict
-        _asdict() converts to dict
-        _replace() returns a new instance with changed fields
-        prefer dataclass if you need mutability or methods
-
-    deque
-        O(1) append and pop from both ends (list pop(0) is O(n))
-        maxlen parameter — auto-discards oldest when full (sliding window)
-        thread-safe for append/pop from opposite ends
-        methods: append, appendleft, pop, popleft, rotate(n)
+Counter
+    dict with count of each element
+    most_common(n) returns top n elements by count
+    supports +, -, & (intersection), | (union) between counters
+defaultdict
+    never raises KeyError — auto-initializes missing keys
+    defaultdict(list)  → missing key gets []
+    defaultdict(int)   → missing key gets 0
+    accessing a missing key CREATES it — don't use for key existence checks
+OrderedDict
+    predates Python 3.7 — regular dict now maintains insertion order
+    still useful for:
+        move_to_end(key) — move a key to front or back
+        equality check cares about order (regular dicts don't)
+        LRU cache implementation
+namedtuple
+    tuple subclass with named fields — immutable
+    more memory efficient than a class or dict
+    _asdict() converts to dict
+    _replace() returns a new instance with changed fields
+    prefer dataclass if you need mutability or methods
+deque
+    O(1) append and pop from both ends (list pop(0) is O(n))
+    maxlen parameter — auto-discards oldest when full (sliding window)
+    thread-safe for append/pop from opposite ends
+    methods: append, appendleft, pop, popleft, rotate(n)
 """
+""" ```
 from collections import Counter, defaultdict, deque, namedtuple
 
 # Counter
@@ -837,7 +833,7 @@ for i in range(5):
 # rotate
 d = deque([1, 2, 3, 4, 5])
 d.rotate(2)   # → deque([4, 5, 1, 2, 3])
-
+```"""
 """
 heapq
     min-heap on top of a regular list
@@ -846,6 +842,7 @@ heapq
     nlargest(n) / nsmallest(n) — more efficient than sorting for small n
     no max-heap built in — negate values to simulate one
 """
+""" ```@1
 import heapq
 
 tasks = []
@@ -856,7 +853,7 @@ heapq.heappush(tasks, (3, "low"))
 
 # max-heap via negation
 heapq.heappush(tasks, (-1, "highest"))
-
+```"""
 """
 bisect
     binary search on a sorted list — O(log n)
@@ -866,6 +863,7 @@ bisect
     use when you need a sorted list with frequent lookups but few inserts
     for frequent inserts + sorted order, use a sorted container (sortedcontainers lib)
 """
+""" ```@1
 import bisect
 
 scores = [10, 20, 30, 40, 50]
@@ -878,7 +876,7 @@ grades = "FDCBA"
 def grade(score):
     return grades[bisect.bisect(breakpoints, score)]
 # grade(85) → 'B'
-
+```"""
 """
 array
     typed array — all elements must be same C type
@@ -887,28 +885,34 @@ array
     typecodes: 'i' int, 'f' float, 'd' double, 'b' signed char
     prefer numpy for math operations — array has no vectorized ops
 """
+""" ```@1
 from array import array
 
 ints = array("i", [1, 2, 3, 4])   # 4 bytes per element vs ~28 for list int
 # ints.append(5)
 # ints[0]  → 1
-
+```"""
 """
 weakref
-    normal reference → object stays alive as long as ref exists
-    weak reference → doesn't count toward GC reference count
-                     becomes None when object is collected
-
-    WeakValueDictionary  → values GC'd when no strong refs remain
-    WeakKeyDictionary    → keys GC'd when no strong refs remain
-    WeakSet              → set whose members can be GC'd
-    weakref.ref(obj)     → callable; returns obj or None if collected
-
+    normal reference
+        object stays alive as long as ref exists
+    weak reference 
+        doesn't count toward GC reference count
+        becomes None when object is collected
+    WeakValueDictionary
+        values GC'd when no strong refs remain
+    WeakKeyDictionary  
+        keys GC'd when no strong refs remain
+    WeakSet            
+        set whose members can be GC'd
+    weakref.ref(obj)   
+        callable; returns obj or None if collected
     use cases:
         caches — don't prevent GC of cached objects
         observer/event systems — listeners shouldn't keep emitter alive
         circular references — A holds B, B holds A; weakref breaks the cycle
 """
+""" ```@1
 import weakref
 
 
@@ -934,6 +938,7 @@ class EventEmitter:
         for listener in list(self._listeners):   # copy — set may shrink during iteration
             listener(event)
 
+```"""
 """
 Exceptions
     BaseException
