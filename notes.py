@@ -1177,19 +1177,24 @@ def main():
 if __name__ == "__main__":
     main()   # only runs when executed directly, not on import
 # ```
+
+# ~~~ Operators
 """
-Walrus operator :=  (assignment expression, PEP 572)
+Assignment expression 
+    :=  (walrus operator)
     assigns and returns a value in a single expression
     avoids calling the same expression twice
     useful in while loops and comprehensions
     use sparingly — can hurt readability if overused
 """
+# ```@1
 import re
 
 data = [1, 2, 3, 4, 5, 6]
 
 # without walrus — calls len twice or needs extra variable
 while len(data) > 3:
+    print(len(data))
     data.pop()
 
 # with walrus
@@ -1206,8 +1211,28 @@ text = "order 42"
 if match := re.search(pattern, text):
     print(match.group())   # only enters if match found
 
+# ```
 
+"""
+Argument Boundaries
+    doesn't accept any data itself. acts as a barrier.
+    Position-Only Boundary (/)
+        forces all arguments before it to be positional-only
+        users cannot use their names when calling the function.
+    Keyword-Only Bounday (*)
+        forces all arguments after it to be named-only
+"""
+# ```@1
+# 'a' and 'b' must be positional. 'c' can be either. 'd' must be a keyword.
+def my_func(a, b, /, c, *, d):
+    return a + b + c + d
 
+# Valid call:
+my_func(1, 2, 3, d=4)
+
+# INVALID call (will throw a TypeError):
+my_func(a=1, b=2, c=3, d=4)
+# ```
 """
 Concurrency models in Python
     threading       → preemptive, OS switches threads, GIL limits true parallelism
