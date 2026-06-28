@@ -648,40 +648,42 @@ def process(user: User) -> None:   # "User" is just a string — no NameError
 # without TYPE_CHECKING:   circular import crashes at startup
 ```"""
 
-
+""" ~~~ Iterators & Generators """
 """
 Iterables, Iterators & Generators
-
     Iterable
         any object you can loop over
         must implement __iter__() which returns an iterator
         examples: list, tuple, str, dict, generator objects
         can be iterated multiple times (unlike iterators)
-
     Iterator
         object that produces values one at a time
         must implement __next__() — raises StopIteration when exhausted
         must also implement __iter__() returning self (so it's also iterable)
         one-directional, single-use — can't reset or rewind
         for loop calls iter() then repeatedly calls next() under the hood
-
     Generator
         a simpler way to write an iterator — no class needed
         function body suspends at yield, resumes on next next() call
         return inside a generator raises StopIteration
         lazy — values produced on demand, not stored in memory
         can only be iterated once — exhausted after full traversal
-
-        Generator function  → def with yield, returns a generator object
-        Generator expression → (x for x in iterable), like list comp but lazy
-
+        Generator expression
+            (x for x in iterable), like list comp but lazy
+        send() method transforms a standard generator into a coroutine
+        allowing for two-way communication.
+        Why is next(gen) required first before send()?
+            You cannot send a non-None value to a newly started generator.
+            if gen.send(10) right out of the gate, Python would throw a TypeError
+            You have to advance the execution code to the very first yield expression 
+            so that there is a "waiting receiver" ready to catch your sent value.
     All generators are iterators.
     Not all iterators are generators.
     All iterators are iterable (have __iter__).
     Not all iterables are iterators (list has __iter__ but no __next__).
 """
-
-""" Generator function """
+""" ```@1
+# Generator function 
 def first_n(n):
     num = 0
     while num < n:
@@ -693,28 +695,42 @@ gen = first_n(5)
 # next(gen)  → 1
 # list(first_n(5))  → [0, 1, 2, 3, 4]
 
-""" Generator expression — lazy list comprehension """
+# Generator expression — lazy list comprehension 
 squares = (x * x for x in range(5))
 # list(squares)  → [0, 1, 4, 9, 16]
 # list(squares)  → []  — already exhausted
+```"""
+""" ```@1
+# send() — pass a value back into a suspended generator 
+def greeter():
+    # 1. Pauses here and yields a status message.
+    # 2. When resumed with .send(), the name goes into `user_name`.
+    user_name = yield "Ready for input" 
 
-""" send() — pass a value back into a suspended generator """
-def accumulator():
-    total = 0
-    while True:
-        value = yield total   # suspends here, receives sent value
-        total += value
+    print(f"Robot: Hello, {user_name}!")
 
-acc = accumulator()
-next(acc)       # prime the generator — advance to first yield
-# acc.send(10)  → 10
-# acc.send(5)   → 15
+# --- Using the generator ---
+
+bot = greeter()
+
+# Step 1: Prime the generator (wake it up and run to the first yield)
+status = next(bot)
+print(f"Main Code received: {status}") 
+
+# Step 2: Send data into the waiting yield
+bot.send("Alice")
+
+output:
+Main Code received: Ready for input
+Robot: Hello, Alice!
+```"""
 
 """
 Iterator class
     only __next__ — not iterable (no __iter__)
     can't use directly in a for loop
 """
+""" ```@1
 class CountIterator:
     def __init__(self, n):
         self.n = n
@@ -729,23 +745,7 @@ class CountIterator:
 
 # next(CountIterator(3))  → 0
 # for i in CountIterator(3): ...  → TypeError: object is not iterable
-
-"""
-Reusable iterable — separates the iterable from the iterator
-    __iter__ returns a fresh iterator each time
-    can be looped multiple times unlike above
-"""
-class Range:
-    def __init__(self, n):
-        self.n = n
-
-    def __iter__(self):
-        return CountIterator(self.n)   # fresh iterator every loop
-
-r = Range(3)
-# list(r)  → [0, 1, 2]
-# list(r)  → [0, 1, 2]  — works again, unlike single-use iterator
-
+```"""
 """
 Iterable + Iterator class
     has both __iter__ and __next__ — usable in for loops
@@ -753,6 +753,7 @@ Iterable + Iterator class
     consequence: single-use — once exhausted, re-looping gives nothing
     to make reusable, __iter__ should return a fresh iterator instead
 """
+""" ```@1
 class CountUpTo:
     def __init__(self, n):
         self.n = n
@@ -769,7 +770,7 @@ class CountUpTo:
         raise StopIteration
 
 # for i in CountUpTo(3): print(i, end=" ")  → 0 1 2
-
+```"""
 
 
 """
