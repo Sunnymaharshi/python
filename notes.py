@@ -458,24 +458,23 @@ def some_args(*args, **kwargs):
 # (1, 2, 3) {'four': 4, 'five': 5}
 ```"""
 
+""" ~~~ Resource Management """
 """
-context manager
+Context manager
     guaranteed setup and teardown logic
     object that defines __enter__ and __exit__. 
     Python's with is syntactic sugar for try/finally.
-    The with statement calls enter before the code block and exit after, even if an exception is thrown.
-    ex: with ... as ...:
-            pass    
+    The with statement calls enter before the code block and exit after, even if an exception is thrown.  
     This is how DB connections guarantee they're closed
     how FastAPI dependencies clean up after a request.
-
 """
+""" ```@1
 with open("README.md", "r") as f:
     # print(f.read())
     pass
 # closes the file connection after exiting the with block
 
-"""
+
 # Manual try/finally (what "with" replaces)
 conn = get_connection()
 try:
@@ -487,9 +486,9 @@ finally:
 with get_connection() as conn:
     result = conn.execute(query)
 # conn.close() called automatically
-"""
+```"""
 
-
+""" ```@1
 # custom context manager
 class DBConnection:
     def __init__(self):
@@ -506,15 +505,15 @@ class DBConnection:
         print("commited and closed connection")
 
 
-# with DBConnection() as connection:
-#     print("working with DB connection")
+with DBConnection() as connection:
+   print("working with DB connection")
 
-"""
+
 output:
 creating connection
 working with DB connection
 commited and closed connection
-"""
+```"""
 
 """
 contextlib
@@ -528,6 +527,7 @@ contextlib
         dynamically compose multiple context managers
         useful when you don't know how many resources to open
 """
+""" ```@1
 from contextlib import contextmanager, suppress
 
 
@@ -543,17 +543,18 @@ def db_connection(url):
         conn["status"] = "disconnected"
         pass              # disconnect / cleanup
 
-# with db_connection("postgres://...") as conn:
-#     pass
+with db_connection("postgres://...") as conn:
+    pass
 
 with suppress(FileNotFoundError):
     open("missing.txt")   # no try/except/pass boilerplate needed
 
 files = ["a.txt", "b.txt"]
-# with ExitStack() as stack:
-#     handles = [stack.enter_context(open(f)) for f in files]
-#     # all files closed automatically when block exits
-
+with ExitStack() as stack:
+    handles = [stack.enter_context(open(f)) for f in files]
+    # all files closed automatically when block exits
+```"""
+""" ~~~ Typing """
 """
 Typing in python
     only useful in development
@@ -562,8 +563,10 @@ Typing in python
     types can be imported from typing 
         ex: from typing import List,Dict,Union
     adding type for a parameter and return
+        ```@2  
         ex: def add(a:int,b:int) -> int:
-                pass
+            pass
+        ```
     Union
         can add all possible types
         ex: Union[str, int]
@@ -584,6 +587,7 @@ TypeVar and Generic
         makes a class generic — can be parameterized with a type
         T flows through so type checker tracks it end-to-end
 """
+""" ```@1
 from typing import Generic, TypeVar
 
 T = TypeVar("T")
@@ -604,7 +608,7 @@ class Stack(Generic[T]):
 
 # s = Stack[int]()
 # s.push("x")  → type error caught by mypy
-
+```"""
 """
 Annotations & Type Checking Imports
     from __future__ import annotations
@@ -612,9 +616,10 @@ Annotations & Type Checking Imports
         stops Python from evaluating type hints as real objects when the module loads.
         Solves forward references and makes annotation syntax cleaner.
         forward reference
+            ```@3 
             class Node:
                 def next(self) -> Node:  # NameError: Node not defined yet
-                    ...
+            ```
         Normally you'd write -> "Node" as a string to defer it. 
         With the import, all annotations become strings automatically.
         __annotations__ returns raw strings, not types
@@ -628,6 +633,7 @@ Annotations & Type Checking Imports
     They work together — TYPE_CHECKING removes the import,
     from __future__ keeps the annotation as a string so the missing name doesn't crash
 """
+""" ```@1
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
@@ -640,7 +646,7 @@ def process(user: User) -> None:   # "User" is just a string — no NameError
 
 # without from __future__: must write user: "User" manually
 # without TYPE_CHECKING:   circular import crashes at startup
-
+```"""
 
 
 """
