@@ -311,23 +311,12 @@ class Config:
 # c = Config("localhost")
 # Config(host='localhost', port=8080, tags=[])
 ``` """
+""" ~~~ Functions & Decorators """
 """
-decorators
+Decorators
     adds additional functionality to the functions
     function that takes another function and returns a modified version of it.
     decorators run bottom-up, closest one to the function runs first
-    # Writing your own decorator
-    from functools import wraps
-    def my_logger(func):
-        @wraps(func) # Keeps original __name__ and __doc__ intact
-        async def wrapper(*args, **kwargs):
-            print(f"Calling {func.__name__}")
-            func(*args, **kwargs)
-            print("Done")
-        return wrapper
-    @my_logger
-    def say_hello():
-        print("Hello, World!")
     Built-in decorators
         @property
             make function as a property
@@ -336,19 +325,33 @@ decorators
         @classmethod
         @dataclass
 """
-
+""" ```@1 
+# Writing your own decorator
+from functools import wraps
+def my_logger(func):
+    @wraps(func) # Keeps original __name__ and __doc__ intact
+    async def wrapper(*args, **kwargs):
+        print(f"Calling {func.__name__}")
+        func(*args, **kwargs)
+        print("Done")
+    return wrapper
+@my_logger
+def say_hello():
+    print("Hello, World!")
+```
+"""
 """
 Class Method Types
     Instance methods
         takes self/object as first parameter
         perform operations that depend on the data of a specific object.
         usage: obj.method() or Class.method(obj)
-    Class (@classmethod)
+    @classmethod
         takes cls as first parametr
         bound to the class and not the instance of the class. 
         callable without instantiating the class
         with class arg u can access it's static props and methods
-    Static (@staticmethod)
+    @staticmethod
         defines a function as static method
         acts as just normal function
         callable without instantiating the class
@@ -363,7 +366,7 @@ Class Method Types
         you can add ur parameters to these as u like
 """
 
-
+""" ```@1 
 class ClassTest:
     static_prop = 1
 
@@ -386,7 +389,7 @@ ClassTest.static_method()
 ClassTest.class_method()
 # static method
 # class method of ClassTest
-
+```"""
 """
 functools
     lru_cache
@@ -402,6 +405,8 @@ functools
         preserves original function metadata when writing decorators
         without it, func.__name__ and __doc__ become wrapper's
 """
+
+""" ```@1 
 from functools import lru_cache, partial, wraps
 
 
@@ -419,17 +424,19 @@ def log_call(func):
         print(f"calling {func.__name__}")
         return func(*args, **kwargs)
     return wrapper
-
+```"""
 
 """
 lambda functions
     has no name
     only returns single expression
 """
+""" ```@1 
 add = lambda x, y: x + y
 no_params = lambda: 1
 # print(add(1,2))
 # print(no_params())
+```"""
 
 """
 Arguments unpacking
@@ -443,12 +450,13 @@ Arguments unpacking
         with key as name and value as argument
 """
 
-
+""" ```@1 
 def some_args(*args, **kwargs):
     print(args, kwargs)
 
 # some_args(1,2,3,four=4,five=5)
 # (1, 2, 3) {'four': 4, 'five': 5}
+```"""
 
 """
 context manager
