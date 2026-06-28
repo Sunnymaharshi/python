@@ -1079,106 +1079,104 @@ Best practices
 
 
 
+# ~~~ Modules & Packages
 """
-Modules & Packages
-
 Module
     any .py file
     when imported, Python executes the entire file top to bottom
     result is cached in sys.modules — subsequent imports reuse the cache
     importing the same module twice doesn't re-run it
-
 Package
     a folder with __init__.py
     __init__.py runs when the package is first imported
     nested packages: src/app/models/ — each folder needs __init__.py
-
 sys.modules
-    dict of all imported modules — {module_name: module_object}
+    dict of all imported modules {module_name: module_object}
     import looks here first before hitting the filesystem
     you can inspect or even remove entries (forces re-import) — rarely needed
-    import sys; sys.modules.keys()  → all currently imported modules
-"""
-
-"""
+    import sys; sys.modules.keys() all currently imported modules
 __init__.py
     marks a folder as a package — can be empty
     runs once when the package is imported
     three main uses:
-
     1. Package initialization — setup code on import
         ex: connect to DB, configure logging
-
     2. Expose a clean public API — flatten deep imports for users
 """
+"""```@2
 # without __init__.py — callers must know internal structure
-# from src.graphics.renderer import render_player
+from src.graphics.renderer import render_player
 
 # with __init__.py re-exporting:
-# src/__init__.py
-# from .graphics.renderer import render_player
-# from .audio.player import play_sound
-# now callers just write:
-# from src import render_player
+#src/__init__.py
+from .graphics.renderer import render_player
+from .audio.player import play_sound
 
+# now callers just write:
+from src import render_player
+``` """
 """
     3. Control exports with __all__
         defines what gets exported on `from package import *`
-        also signals intent — "these are the public names"
+        also signals intent "these are the public names"
         names starting with _ are excluded from * even without __all__
 """
+""" ```@2
 # src/__init__.py
-# from .graphics import render_player
-# from .audio import play_sound
-# __all__ = ["render_player", "play_sound"]  # only these exported on import *
+from .graphics import render_player
+from .audio import play_sound
+__all__ = ["render_player", "play_sound"]  # only these exported on import *
+```"""
 
 """
 Imports
-
-absolute import — full path from project root (preferred)
-    from src.app.main import app
-
-relative import — relative to current file's location
-    from . import utils          # same folder
-    from .. import config        # parent folder
-    from .utils import helper    # specific name from same folder
-    only works inside a package (folder with __init__.py)
-    can't use in a top-level script run directly with python file.py
-
-import order (Python resolution order)
-    1. sys.modules cache
-    2. built-in modules (sys, os, math)
-    3. frozen modules
-    4. sys.path directories (project root, site-packages, etc.)
-
-circular imports
-    A imports B, B imports A — ImportError or partially initialized module
-    fix 1: restructure — move shared code to a third module C
-    fix 2: move the import inside the function (lazy import)
-    fix 3: TYPE_CHECKING guard for type-hint-only imports
+    absolute import 
+        full path from project root (preferred)
+        from src.app.main import app
+    relative import
+        relative to current file's location
+        from . import utils          # same folder
+        from .. import config        # parent folder
+        from .utils import helper    # specific name from same folder
+        only works inside a package (folder with __init__.py)
+        can't use in a top-level script run directly with python file.py
+    import order (Python resolution order)
+        1. sys.modules cache
+        2. built-in modules (sys, os, math)
+        3. frozen modules
+        4. sys.path directories (project root, site-packages, etc.)
+    circular imports
+        A imports B, B imports A — ImportError or partially initialized module
+        fix 1: restructure — move shared code to a third module C
+        fix 2: move the import inside the function (lazy import)
+        fix 3: TYPE_CHECKING guard for type-hint-only imports
 """
+# ```@2
 # lazy import to break circular dependency
 def get_user():
     from src.models import User  # imported only when function is called
     return User()
-
+# ```
 """
 __name__
     every module has a __name__ attribute set automatically
-    when run directly:  __name__ == "__main__"
-    when imported:      __name__ == module's dotted path  e.g. "src.app.main"
-
+    when run directly
+        __name__ == "__main__"
+    when imported 
+        __name__ == module's dotted path  
+        ex: "src.app.main"
     if __name__ == "__main__": guard
         code inside only runs when file is executed directly
         not when imported as a module
         use for: CLI entrypoints, manual tests, script mode
 """
+# ```@1
 def main():
     print("running")
 
 if __name__ == "__main__":
     main()   # only runs when executed directly, not on import
-
+# ```
 """
 Walrus operator :=  (assignment expression, PEP 572)
     assigns and returns a value in a single expression
