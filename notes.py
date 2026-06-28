@@ -939,6 +939,7 @@ class EventEmitter:
             listener(event)
 
 ```"""
+""" ~~~ Exceptions """
 """
 Exceptions
     BaseException
@@ -947,8 +948,8 @@ Exceptions
     Exception
         base for all regular exceptions — catch this at most
         always prefer catching specific exceptions over bare except
-
     Built-in hierarchy (common ones)
+        ```pre
         Exception
         ├── ValueError       wrong value, right type  (int("abc"))
         ├── TypeError        wrong type               (1 + "a")
@@ -961,14 +962,16 @@ Exceptions
             ├── FileNotFoundError
             ├── PermissionError
             └── TimeoutError
-
+        ```
     Custom exceptions
         inherit from Exception or a specific subclass
         add context via __init__ or extra attributes
         use specific subclasses so callers can catch at right level
 """
+# ```@1
 class AppError(Exception):
-    """Base for all app errors — callers can catch this or be specific"""
+    #Base for all app errors — callers can catch this or be specific
+    pass
 
 class DatabaseError(AppError):
     def __init__(self, message, query=None):
@@ -977,24 +980,24 @@ class DatabaseError(AppError):
 
 class RecordNotFoundError(DatabaseError):
     pass
-
+    
+# ```
 """
 Exception chaining
     raise X from Y
         explicit chain — original traceback preserved and shown
         __cause__ is set, Python prints "The above exception was the direct cause"
         use when translating low-level errors into domain errors
-
     raise X from None
         suppresses original — __cause__ is None, __suppress_context__ = True
         use when original is implementation detail irrelevant to caller
-
     implicit chaining (no from)
         if exception raised inside except block without from
         Python auto-chains via __context__
         prints "During handling of the above exception, another occurred"
         usually unintentional — always use explicit from or from None
 """
+# ```@1
 def fetch(key):
     try:
         return {}[key]
@@ -1015,15 +1018,18 @@ def fetch_implicit(key):
     except KeyError:
         log = open("missing.log")   # if this fails too
         # traceback: KeyError context + FileNotFoundError — messy, unintentional
-
+# ```
 """
 try / except / else / finally
-    else    runs only if no exception was raised in try
-            cleaner than putting success logic inside try
-            keeps try block minimal — only the risky operation
-    finally always runs — even if return or exception in try/except
-            use for guaranteed cleanup (though prefer context managers)
+    else    
+        runs only if no exception was raised in try
+        cleaner than putting success logic inside try
+        keeps try block minimal — only the risky operation
+    finally always runs
+        even if return or exception in try/except
+        use for guaranteed cleanup (though prefer context managers)
 """
+# ```@1
 def read_config(path):
     f = None
     try:
@@ -1035,36 +1041,38 @@ def read_config(path):
     finally:
         if f:
             f.close()           # always runs
-
+# ```
 """
 Exception groups (Python 3.11+)
-    ExceptionGroup — holds multiple exceptions at once
+    ExceptionGroup holds multiple exceptions at once
     used in asyncio.TaskGroup when multiple tasks fail simultaneously
-    except* syntax — handles specific types within the group
+    except* syntax handles specific types within the group
 """
-# async def main():
-#     async with asyncio.TaskGroup() as tg:
-#         tg.create_task(fail_with(ValueError("bad value")))
-#         tg.create_task(fail_with(TypeError("bad type")))
-#         tg.create_task(fail_with(ValueError("another bad value")))
-#
-# try:
-#     asyncio.run(main())
-# except* ValueError as eg:
-#     print(eg.exceptions)   # all ValueErrors from the group
-# except* TypeError as eg:
-#     print(eg.exceptions)
+""" ```@1
+async def main():
+    async with asyncio.TaskGroup() as tg:
+        tg.create_task(fail_with(ValueError("bad value")))
+        tg.create_task(fail_with(TypeError("bad type")))
+        tg.create_task(fail_with(ValueError("another bad value")))
+
+try:
+    asyncio.run(main())
+except* ValueError as eg:
+    print(eg.exceptions)   # all ValueErrors from the group
+except* TypeError as eg:
+    print(eg.exceptions)
+```"""
 
 """
 __tracebacklimit__
-    sys.tracebacklimit = 0  → suppresses traceback in output (CLI tools)
+    sys.tracebacklimit = 0 suppresses traceback in output (CLI tools)
     only affects display, not exception chaining internals
 """
 
 """
 Best practices
-    never use bare except: — catches KeyboardInterrupt, SystemExit too
-    use from e when wrapping — preserves root cause for debugging
+    never use bare except, catches KeyboardInterrupt, SystemExit too
+    use from e when wrapping, preserves root cause for debugging
     use from None when hiding implementation details from API callers
     prefer contextlib.suppress over try/except/pass for simple ignores
 """
