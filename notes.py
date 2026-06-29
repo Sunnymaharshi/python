@@ -1233,49 +1233,51 @@ my_func(1, 2, 3, d=4)
 # INVALID call (will throw a TypeError):
 my_func(a=1, b=2, c=3, d=4)
 # ```
+
+# ~~~ Concurrency
 """
 Concurrency models in Python
-    threading       → preemptive, OS switches threads, GIL limits true parallelism
-    multiprocessing → true parallelism, separate processes, separate GILs, high overhead
-    asyncio         → cooperative, single-threaded, you control when to yield
-
-    I/O bound  → asyncio (best) or threading
-    CPU bound  → multiprocessing or ProcessPoolExecutor
-
-    Preemptive vs. Cooperative Multitasking
-        Premptive
-            Control
-                Operating System decides when a thread stops.
-            Interruptions
-                Can happen at any time
-            Reliability
-                A single runaway loop can hang the entire program.
-        Cooperative
-            Control
-                Thread decides when to give up control.
-            Interruptions
-                Only happens when the thread explicitly yields (e.g., await or yield).
-            Reliability
-                Prevents one "rogue" thread from freezing the entire system.
+    threading
+        preemptive, OS switches threads, GIL limits true parallelism
+    multiprocessing
+        true parallelism, separate processes, separate GILs, high overhead
+    asyncio
+        cooperative, single-threaded, you control when to yield
+    I/O bound
+        asyncio (best) or threading
+    CPU bound
+        multiprocessing or ProcessPoolExecutor
+Preemptive vs Cooperative
+    | Feature                | Preemptive                                          | Cooperative                                          |
+    |------------------------|-----------------------------------------------------|------------------------------------------------------|
+    | Who controls switching | Operating System                                    | The task itself                                      |
+    | When switch happens    | Anytime — OS can interrupt mid-execution            | Only at explicit yield points (`await`, `yield`)     |
+    | Runaway task           | OS forcibly stops it — other tasks unaffected       | Blocks entire program until it yields                |
+    | Race conditions        | Yes — switch can happen between any two instructions| Yes — but only between yield points                  |
+    | Examples               | OS threads (`threading`)                            | `asyncio`, Python generators                         |
+    | Overhead               | Higher — OS context switch                          | Lower — no OS involvement                            |
+    | Predictability         | Less — OS decides timing                            | More — you know exactly where switches can occur     |
         
 GIL (Global Interpreter Lock)
     CPython allows only one thread to execute Python bytecode at a time
     GIL releases during I/O — so threading still helps for network/disk tasks
-    GIL does NOT protect your data — race conditions still possible between threads
-"""
+    GIL does NOT protect your data — race conditions still possible (GIL can release mid-operation)
+    Doesn't affect multiprocessing, bypasses the GIL entirely by using separate processes.
+    multiprocessing bypasses GIL entirely — separate processes, true parallelism 
 
-"""
 asyncio
     Python's built-in tool for handling cooperative multitasking
     provides the async and await syntax and manages the Event Loop.
     Everything runs on a single thread called the Event Loop
-    cooperative multitasking on a single thread — the event loop
     tasks voluntarily yield at await points, event loop runs another task
     no OS context switching — lower overhead than threads
     race conditions 
-        A task can still be paused (at an await statement) in the middle of a critical operation. 
-        If another task steps in and modifies the same shared data before the first task resumes
-        you get a race condition.
+        only happen at await points — if no await in a critical section you're safe 
+        if another task modifies shared data before the first task resumes, race condition occurs
+        more predictable than thread races — you control where yields happen
+    blocking calls 
+        calling blocking I/O (requests.get, time.sleep) freezes the entire event loop
+        use asyncio.sleep() and async libraries (httpx, aiohttp) instead
     coroutine 
         async def function, doesn't run until awaited or scheduled
     task      
@@ -1288,62 +1290,64 @@ asyncio
     asyncio.run()
         creates event loop, runs coroutine, closes loop on exit
         one per program — don't nest
+    asyncio.gather()
+        run multiple coroutines concurrently, await all to finish
+    asyncio.create_task()
+        schedule coroutine as background Task without awaiting immediately
+    when to use what
+        threads for I/O-bound tasks with blocking libraries
+        asyncio for high-concurrency I/O with async libraries
+        multiprocessing CPU-bound work (bypasses GIL)
 """
+# ```@1
 import asyncio
+import time
+from concurrent.futures import ProcessPoolExecutor
 
 
 async def fetch(url: str) -> str:
-    await asyncio.sleep(1)   # simulates I/O — yields control to event loop
+    await asyncio.sleep(1)          # simulates I/O — yields control to event loop
     return f"data from {url}"
 
 async def main():
     result = await fetch("api.example.com")   # sequential — waits for fetch
 
-asyncio.run(main())
+asyncio.run(main())                 # creates event loop, runs coroutine, closes loop
 
-"""
-Tasks — run coroutines concurrently
-    asyncio.create_task()  → schedules coroutine immediately, returns Task
-    task runs in background — doesn't block current coroutine
-    asyncio.gather()       → run multiple coroutines concurrently, collect results
-    asyncio.gather return_exceptions=True — exceptions returned, not raised
-"""
+# ```
+# ```@1
 async def main_concurrent():
     # sequential — total ~2s
     r1 = await fetch("url1")
     r2 = await fetch("url2")
 
-    # concurrent — total ~1s
-    r1, r2 = await asyncio.gather(
-        fetch("url1"),
-        fetch("url2"),
-    )
+    # gather — concurrent, collect results — total ~1s
+    # return_exceptions=True — exceptions returned as values, not raised
+    r1, r2 = await asyncio.gather(fetch("url1"), fetch("url2"))
 
-    # create_task — more control, task starts immediately
+    # create_task — schedules immediately, runs in background, more control
     task = asyncio.create_task(fetch("url3"))
     # do other work here while task runs
     result = await task
 
-"""
-TaskGroup (Python 3.11+)
-    preferred over gather for structured concurrency
-    all tasks cancelled if one raises — no silent failures
-    cleaner than managing task list manually
-"""
+# ```
+# ```@1
+# TaskGroup (Python 3.11+) — preferred over gather
+# all tasks cancelled if one raises — no silent failures
+
 async def main_taskgroup():
     async with asyncio.TaskGroup() as tg:
         t1 = tg.create_task(fetch("url1"))
         t2 = tg.create_task(fetch("url2"))
     # both done here — exceptions propagate as ExceptionGroup
     print(t1.result(), t2.result())
+# ```
 
-"""
-asyncio.Lock
-    ensures only one coroutine enters a critical section at a time
-    other coroutines await at the lock until released
-    use async with — always preferred over manual acquire/release
-    race condition example: two tasks read-modify-write same value
-"""
+# ```@1
+# Lock — prevent race conditions
+# ensures only one coroutine enters critical section at a time
+# always use `async with` over manual acquire/release
+
 lock = asyncio.Lock()
 counter = 0
 
@@ -1351,49 +1355,49 @@ async def increment():
     global counter
     async with lock:
         temp = counter
-        await asyncio.sleep(0)   # yield — without lock another task could increment here
+        # yield — without lock another task could increment here
+        await asyncio.sleep(0)      
         counter = temp + 1
 
-"""
-asyncio.timeout (Python 3.11+)
-    replaces asyncio.wait_for — cleaner syntax
-    raises TimeoutError if block doesn't complete in time
-"""
+# ```
+# ```@1
+# timeout (Python 3.11+) — replaces asyncio.wait_for 
+
 async def with_timeout():
     async with asyncio.timeout(5.0):
-        result = await fetch("slow-api.com")   # raises TimeoutError if > 5s
+        result = await fetch("slow-api.com")    # raises TimeoutError if > 5s
 
-"""
-asyncio vs threading vs multiprocessing
-    Feature             asyncio             threading           multiprocessing
-    Model               cooperative         preemptive          preemptive
-    Threads/Processes   1 thread            multiple threads    multiple processes
-    GIL affected?       No (single thread)  Yes                 No (separate GIL)
-    True parallelism?   No                  No (GIL)            Yes
-    Overhead            very low            medium              high
-    Race conditions?    Yes (between awaits) Yes                Yes
-    Best for            I/O bound           I/O bound           CPU bound
-    Shared memory?      Yes (same thread)   Yes (with locks)    No (use Queue/Pipe)
-"""
-
-"""
-running blocking code in asyncio
-    never call blocking functions directly — freezes the event loop
-    run_in_executor wraps blocking code in a thread/process pool
-    loop.run_in_executor(None, ...) → uses default ThreadPoolExecutor
-"""
-import time
-
+# ```
+# ```@1
+# blocking code in asyncio
+# never call blocking functions directly — freezes entire event loop
+# run_in_executor wraps blocking code in a thread/process pool
 
 async def main_with_blocking():
     loop = asyncio.get_event_loop()
-    # runs time.sleep in a thread — doesn't block event loop
-    await loop.run_in_executor(None, time.sleep, 1)
 
-    # or with ProcessPoolExecutor for CPU-bound
-    from concurrent.futures import ProcessPoolExecutor
+    # I/O-bound blocking — run in thread pool
+    # None = default ThreadPoolExecutor
+    await loop.run_in_executor(None, time.sleep, 1)     
+
+    # CPU-bound blocking — run in process pool (bypasses GIL)
     with ProcessPoolExecutor() as pool:
         result = await loop.run_in_executor(pool, heavy_cpu_task)
 
 def heavy_cpu_task():
     return sum(range(10_000_000))
+# ```
+
+"""
+asyncio vs threading vs multiprocessing
+    | Feature             | asyncio           | threading          | multiprocessing       |
+    |---------------------|-------------------|--------------------|-----------------------|
+    | Model               | cooperative       | preemptive         | preemptive            |
+    | Threads/Processes   | 1 thread          | multiple threads   | multiple processes    |
+    | GIL affected?       | No (single thread)| Yes                | No (separate GIL)     |
+    | True parallelism?   | No                | No (GIL)           | Yes                   |
+    | Overhead            | very low          | medium             | high                  |
+    | Race conditions?    | Yes (at awaits)   | Yes                | Yes                   |
+    | Best for            | I/O bound         | I/O bound          | CPU bound             |
+    | Shared memory?      | Yes (same thread) | Yes (with locks)   | No (use Queue/Pipe)   |
+"""
